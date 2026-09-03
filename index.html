@@ -1,0 +1,1326 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>传感器失效下的随机配置算法研究 · 毕设工作汇报 V2.1</title>
+<!-- KaTeX 本地优先加载（katex/ 目录随本文件分发，无需联网）；
+     若本地目录缺失则依次回退 jsdelivr → cdnjs → npmmirror。
+     CSS 与 JS 必须成对加载，否则公式会显示为竖排堆叠的乱码 -->
+<script>
+(function(){
+  var SOURCES = [
+    { css: "katex/katex.min.css",        js: "katex/katex.min.js",        ar: "katex/auto-render.min.js" },
+    { css: "https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css", js: "https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js", ar: "https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js" },
+    { css: "https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css", js: "https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js", ar: "https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/contrib/auto-render.min.js" },
+    { css: "https://registry.npmmirror.com/katex/0.16.9/files/dist/katex.min.css", js: "https://registry.npmmirror.com/katex/0.16.9/files/dist/katex.min.js", ar: "https://registry.npmmirror.com/katex/0.16.9/files/dist/contrib/auto-render.min.js" }
+  ];
+  /* 样式表：逐源尝试，加载失败自动换下一个（CSS 缺失时公式字符会竖排堆叠） */
+  (function loadCss(i){
+    if(i >= SOURCES.length) return;
+    var l = document.createElement("link");
+    l.rel = "stylesheet"; l.href = SOURCES[i].css;
+    l.onerror = function(){ loadCss(i + 1); };
+    document.head.appendChild(l);
+  })(0);
+  /* 脚本：本地 katex.min.js 成功后加载本地 auto-render；任一失败自动换源 */
+  function loadJs(i, key, done){
+    if(i >= SOURCES.length) return;
+    var s = document.createElement("script");
+    s.src = SOURCES[i][key];
+    s.onload = done;
+    s.onerror = function(){ loadJs(i + 1, key, done); };
+    document.head.appendChild(s);
+  }
+  loadJs(0, "js", function(){
+    loadJs(0, "ar", function(){
+      /* 渲染由页面底部脚本以 300ms 轮询触发，此处无需额外处理 */
+    });
+  });
+})();
+</script>
+<style>
+  :root{
+    --ink:#141f33;--ink-2:#1d2c47;
+    --paper:#faf8f4;--card:#ffffff;
+    --accent:#b5402c;--accent-soft:#f6e8e4;
+    --gold:#c8963e;--text:#2b2f36;--muted:#6b7280;--line:#e5e0d6;
+    --blue:#2c5f8a;--blue-soft:#eaf1f7;--ok:#2e7d5b;
+    --sidebar-w:272px;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html{scroll-behavior:smooth;scroll-padding-top:24px;}
+  body{font-family:"Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif;background:var(--paper);color:var(--text);font-size:15.5px;line-height:1.85;}
+  /* ============ 侧边导航 ============ */
+  .sidebar{position:fixed;left:0;top:0;bottom:0;width:var(--sidebar-w);background:linear-gradient(180deg,var(--ink) 0%,var(--ink-2) 100%);color:#d8dce6;display:flex;flex-direction:column;z-index:10;}
+  .sidebar .brand{padding:26px 22px 18px;border-bottom:1px solid rgba(255,255,255,.09);}
+  .sidebar .brand .kicker{font-size:11px;letter-spacing:.35em;color:var(--gold);text-transform:uppercase;margin-bottom:8px;}
+  .sidebar .brand h1{font-family:"Noto Serif SC","Source Han Serif SC","STSong",serif;font-size:19px;line-height:1.5;color:#f3f1ea;font-weight:700;}
+  .sidebar .brand .sub{font-size:12px;color:#93a0b5;margin-top:6px;}
+  .nav{flex:1;overflow-y:auto;padding:14px 0;}
+  .nav::-webkit-scrollbar{width:4px;}
+  .nav::-webkit-scrollbar-thumb{background:rgba(255,255,255,.15);border-radius:2px;}
+  .nav-group{font-size:11px;letter-spacing:.25em;color:#7c8aa3;padding:14px 22px 6px;}
+  .nav-item{display:flex;align-items:baseline;gap:10px;padding:8px 22px;cursor:pointer;color:#c2cad8;font-size:13.5px;border-left:3px solid transparent;transition:all .18s ease;user-select:none;}
+  .nav-item .no{font-family:"Georgia",serif;font-size:12px;color:#5f6e88;min-width:20px;}
+  .nav-item:hover{color:#fff;background:rgba(255,255,255,.05);}
+  .nav-item.active{color:#fff;background:rgba(181,64,44,.18);border-left-color:var(--accent);}
+  .nav-item.active .no{color:var(--gold);}
+  .sidebar .foot{padding:16px 22px 20px;border-top:1px solid rgba(255,255,255,.09);font-size:11.5px;color:#7c8aa3;line-height:1.7;}
+  .sidebar .foot b{color:#cfd6e2;font-weight:600;}
+  /* ============ 主区域 ============ */
+  .main{margin-left:var(--sidebar-w);}
+  .content{max-width:1100px;margin:0 auto;padding:44px 52px 120px;}
+  .slide{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:40px 56px;margin-bottom:34px;box-shadow:0 2px 18px rgba(20,31,51,.06);animation:fadeUp .5s ease both;}
+  @keyframes fadeUp{from{opacity:0;transform:translateY(12px);}to{opacity:1;transform:none;}}
+  @media (prefers-reduced-motion: reduce){.slide{animation:none;}html{scroll-behavior:auto;}}
+  .progress{position:fixed;top:0;left:var(--sidebar-w);right:0;height:3px;background:rgba(20,31,51,.08);z-index:20;}
+  .progress .bar{height:100%;background:var(--accent);width:0;transition:width .1s linear;}
+  /* ============ 排版组件 ============ */
+  .slide h2{font-family:"Noto Serif SC","Source Han Serif SC","STSong",serif;font-size:27px;color:var(--ink);font-weight:700;margin-bottom:6px;display:flex;align-items:baseline;gap:14px;}
+  .slide h2 .idx{font-family:"Georgia",serif;font-size:15px;color:var(--accent);font-weight:400;}
+  .rule{width:52px;height:3px;background:var(--accent);margin:10px 0 26px;border-radius:2px;}
+  .lead{color:var(--muted);font-size:14px;margin-bottom:20px;}
+  h3.sec{font-size:16.5px;color:var(--ink);margin:28px 0 12px;font-weight:700;display:flex;align-items:center;gap:8px;}
+  h3.sec::before{content:"";width:8px;height:8px;background:var(--gold);border-radius:1px;flex:none;}
+  p{margin-bottom:12px;}
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:22px;}
+  .cols-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;}
+  .cols-4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;}
+  @media (max-width:1200px){.cols,.cols-3,.cols-4{grid-template-columns:1fr;}}
+  .card{background:var(--paper);border:1px solid var(--line);border-radius:6px;padding:16px 20px;}
+  .card h4{font-size:14px;color:var(--ink);margin-bottom:6px;font-weight:700;}
+  .card p,.card li{font-size:13.5px;color:#4a4f58;}
+  ul.tick{list-style:none;}
+  ul.tick li{padding-left:20px;position:relative;margin-bottom:7px;font-size:14px;}
+  ul.tick li::before{content:"▸";position:absolute;left:2px;color:var(--accent);font-size:12px;}
+  a.ref{color:var(--blue);text-decoration:none;border-bottom:1px dotted var(--blue);transition:all .15s;}
+  a.ref:hover{color:var(--accent);border-bottom-color:var(--accent);background:var(--accent-soft);}
+  /* 定理块 */
+  .thm{border:1px solid #e8d9d3;border-left:4px solid var(--accent);background:linear-gradient(180deg,#fdf9f7,#faf3f0);border-radius:4px;padding:18px 24px;margin:16px 0;}
+  .thm .thm-tag{display:inline-block;font-family:"Noto Serif SC",serif;font-weight:700;color:var(--accent);font-size:15px;margin-right:10px;}
+  .thm .thm-name{color:var(--ink);font-weight:600;font-size:14.5px;}
+  .thm .body{margin-top:8px;font-size:14px;}
+  .lemma{border-left-color:var(--blue);border-color:#d9e3ec;background:linear-gradient(180deg,#f8fafc,#f2f6fa);}
+  .lemma .thm-tag{color:var(--blue);}
+  /* 支撑原定理（可折叠） */
+  .orig-thm{border:1px dashed var(--gold);border-radius:6px;background:#fdfaf3;margin:14px 0;}
+  .orig-thm .orig-head{display:flex;align-items:center;gap:10px;padding:12px 18px;cursor:pointer;user-select:none;}
+  .orig-thm .orig-head .tag{font-size:11px;font-weight:700;letter-spacing:.15em;color:#8a6425;background:#faf3e6;border:1px solid #e8d9b0;border-radius:3px;padding:2px 8px;white-space:nowrap;}
+  .orig-thm .orig-head .t{font-weight:700;color:var(--ink);font-size:14px;flex:1;}
+  .orig-thm .orig-head .arrow{color:#8a6425;font-size:12px;transition:transform .2s;}
+  .orig-thm.open .orig-head .arrow{transform:rotate(90deg);}
+  .orig-thm .orig-body{display:none;padding:4px 20px 16px;border-top:1px dashed #e8d9b0;font-size:13.5px;}
+  .orig-thm.open .orig-body{display:block;}
+  .orig-thm .src{margin-top:10px;padding-top:10px;border-top:1px solid #f0e8d5;font-size:12.5px;color:var(--muted);}
+  /* 证明步骤（可点击展开） */
+  .proof{background:#fff;border:1px dashed #d8d2c5;border-radius:4px;padding:14px 20px;margin:10px 0;font-size:13.8px;}
+  .proof .pf-tag{font-weight:700;color:var(--ink);font-family:"Noto Serif SC",serif;}
+  .proof .pf-note{font-size:12.5px;color:var(--muted);margin-left:8px;}
+  .pstep{border:1px solid var(--line);border-left:3px solid var(--blue);border-radius:4px;background:#fbfaf7;margin:8px 0;padding:10px 14px;cursor:pointer;transition:all .15s;}
+  .pstep:hover{background:var(--blue-soft);border-left-color:var(--accent);}
+  .pstep .ps-head{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;}
+  .pstep .ps-no{font-family:"Georgia",serif;color:var(--blue);font-weight:700;font-size:13px;white-space:nowrap;}
+  .pstep .ps-title{font-weight:700;color:var(--ink);font-size:13.8px;}
+  .pstep .ps-brief{font-size:12.8px;color:#5a6070;margin-top:3px;}
+  .pstep .ps-cta{font-size:12px;color:var(--accent);white-space:nowrap;margin-left:auto;}
+  .pstep .ps-cta::after{content:" ▸";}
+  .keypoint{background:var(--blue-soft);border-radius:4px;padding:12px 18px;font-size:13.5px;color:var(--ink);margin-top:14px;}
+  .keypoint b{color:var(--accent);}
+  .formula-center{margin:14px 0;}
+  /* 表格 */
+  table{width:100%;border-collapse:collapse;font-size:13.2px;margin:12px 0;}
+  th{font-weight:700;color:var(--ink);border-top:2px solid var(--ink);border-bottom:1px solid var(--ink);padding:8px 10px;text-align:left;background:#fff;}
+  td{border-bottom:1px solid var(--line);padding:7px 10px;color:#3c414b;}
+  tr:last-child td{border-bottom:2px solid var(--ink);}
+  .hl td{background:var(--accent-soft);color:var(--ink);font-weight:600;}
+  .num{font-family:"Georgia",serif;}
+  .good{color:var(--ok);font-weight:700;}
+  .bad{color:var(--accent);font-weight:700;}
+  /* 徽章 */
+  .badge{display:inline-block;font-size:11.5px;padding:2px 10px;border-radius:20px;border:1px solid var(--line);background:#fff;color:var(--muted);margin-right:6px;white-space:nowrap;}
+  .badge.red{border-color:var(--accent);color:var(--accent);background:var(--accent-soft);}
+  .badge.blue{border-color:var(--blue);color:var(--blue);background:var(--blue-soft);}
+  .badge.gold{border-color:var(--gold);color:#8a6425;background:#faf3e6;}
+  .stars{color:var(--gold);letter-spacing:2px;font-size:13px;white-space:nowrap;}
+  .stars .off{color:#e3ddcf;}
+  /* 封面 */
+  .cover{background:linear-gradient(160deg,#fff 0%,#f8f4ec 100%);}
+  .cover .kicker{font-size:13px;letter-spacing:.5em;color:var(--accent);margin-bottom:18px;}
+  .cover h1{font-family:"Noto Serif SC","Source Han Serif SC","STSong",serif;font-size:clamp(28px,3.6vw,42px);color:var(--ink);line-height:1.35;font-weight:700;margin-bottom:10px;word-break:keep-all;}
+  .cover .en{font-family:"Georgia",serif;font-style:italic;font-size:16px;color:var(--muted);margin-bottom:36px;}
+  .cover .meta{border-top:1px solid var(--line);padding-top:24px;display:flex;gap:48px;flex-wrap:wrap;}
+  .cover .meta div{font-size:14px;}
+  .cover .meta b{display:block;font-size:12px;color:var(--muted);font-weight:400;margin-bottom:3px;}
+  .cover .meta span{color:var(--ink);font-weight:600;}
+  .hint{font-size:12px;color:var(--muted);margin-top:20px;}
+  /* 算法步骤：一行5步 */
+  .steps{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin:16px 0;}
+  .step{padding:12px 13px;background:var(--paper);border:1px solid var(--line);border-top:3px solid var(--gold);border-radius:4px;font-size:12.6px;position:relative;transition:all .15s;}
+  .step:hover{border-top-color:var(--accent);background:var(--accent-soft);transform:translateY(-2px);}
+  .step b{display:block;color:var(--accent);font-size:12px;margin-bottom:5px;letter-spacing:.05em;}
+  /* 仅对直接子级 span 生效：若写作 .step span 会把 KaTeX 公式内部的
+     span 也变成块级，导致公式字符竖排堆叠（乱码形态） */
+  .step > span{color:#4a4f58;display:block;}
+  .step .formula{font-size:12px;color:var(--ink);background:#fff;border:1px solid var(--line);border-radius:3px;padding:3px 6px;margin-top:6px;display:inline-block;}
+  @media (max-width:1100px){.steps{grid-template-columns:1fr;}}
+  .step-detail{margin-top:14px;border:1px solid var(--line);border-radius:6px;overflow:hidden;}
+  .step-detail .sd-row{display:grid;grid-template-columns:110px 1fr;border-bottom:1px solid var(--line);}
+  .step-detail .sd-row:last-child{border-bottom:none;}
+  .step-detail .sd-row:hover{background:var(--paper);}
+  .step-detail .sd-no{background:#f6f3ec;font-weight:700;color:var(--accent);padding:10px 14px;font-size:13px;border-right:1px solid var(--line);}
+  .step-detail .sd-body{padding:10px 18px;font-size:13.4px;color:#3c414b;}
+  .step-detail .sd-body .f{background:#fff;border:1px solid var(--line);border-radius:3px;padding:4px 10px;margin:6px 0;display:inline-block;}
+  .small{font-size:12.5px;color:var(--muted);}
+  /* 实验参数卡片 */
+  .exp-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin:18px 0;}
+  @media (max-width:1100px){.exp-grid{grid-template-columns:1fr 1fr;}}
+  @media (max-width:800px){.exp-grid{grid-template-columns:1fr;}}
+  .exp-card{background:#fff;border:1px solid var(--line);border-radius:8px;overflow:hidden;cursor:pointer;transition:all .2s;box-shadow:0 1px 8px rgba(20,31,51,.05);}
+  .exp-card:hover{transform:translateY(-4px);box-shadow:0 8px 22px rgba(20,31,51,.14);border-color:var(--gold);}
+  .exp-card .thumb{height:150px;background:#f4f1ea;display:flex;align-items:center;justify-content:center;overflow:hidden;border-bottom:1px solid var(--line);}
+  .exp-card .thumb img{max-width:100%;max-height:100%;object-fit:contain;}
+  .exp-card .ec-body{padding:12px 16px 14px;}
+  .exp-card .ec-title{font-size:14.5px;font-weight:700;color:var(--ink);display:flex;align-items:center;gap:8px;}
+  .exp-card .ec-title .dot{width:7px;height:7px;background:var(--accent);border-radius:50%;flex:none;}
+  .exp-card .ec-sub{font-size:12.3px;color:var(--muted);margin-top:4px;line-height:1.6;}
+  .exp-card .ec-cta{font-size:12px;color:var(--blue);margin-top:8px;font-weight:600;}
+  .exp-card .ec-cta::after{content:" →";}
+  /* 弹窗 */
+  .modal-overlay{position:fixed;inset:0;background:rgba(20,31,51,.55);backdrop-filter:blur(3px);z-index:50;display:none;align-items:flex-start;justify-content:center;padding:44px 24px;overflow-y:auto;}
+  .modal-overlay.show{display:flex;animation:mfade .2s ease;}
+  @keyframes mfade{from{opacity:0;}to{opacity:1;}}
+  .modal{background:#fff;border-radius:10px;max-width:1080px;width:100%;box-shadow:0 18px 60px rgba(0,0,0,.35);animation:mpop .25s ease;}
+  @keyframes mpop{from{opacity:0;transform:translateY(18px) scale(.985);}to{opacity:1;transform:none;}}
+  .modal-head{display:flex;align-items:center;gap:12px;padding:18px 26px;border-bottom:1px solid var(--line);position:sticky;top:0;background:#fff;border-radius:10px 10px 0 0;z-index:2;}
+  .modal-head .m-tag{font-size:11px;font-weight:700;letter-spacing:.12em;color:#8a6425;background:#faf3e6;border:1px solid #e8d9b0;border-radius:3px;padding:2px 9px;white-space:nowrap;}
+  .modal-head .m-title{font-family:"Noto Serif SC",serif;font-size:17.5px;font-weight:700;color:var(--ink);flex:1;}
+  .modal-close{width:32px;height:32px;border-radius:50%;border:1px solid var(--line);background:#fff;color:var(--muted);font-size:16px;cursor:pointer;flex:none;transition:all .15s;}
+  .modal-close:hover{background:var(--accent);border-color:var(--accent);color:#fff;}
+  .modal-body{padding:22px 30px 30px;max-height:calc(100vh - 170px);overflow-y:auto;}
+  .modal-body h3{font-size:15.5px;color:var(--ink);margin:20px 0 10px;font-weight:700;display:flex;align-items:center;gap:8px;}
+  .modal-body h3:first-child{margin-top:0;}
+  .modal-body h3::before{content:"";width:7px;height:7px;background:var(--gold);border-radius:1px;flex:none;}
+  .modal-body p{font-size:13.8px;color:#3c414b;}
+  .modal-body .figwrap{text-align:center;background:var(--paper);border:1px solid var(--line);border-radius:6px;padding:12px;margin:12px 0;}
+  .modal-body .figwrap img{max-width:100%;max-height:560px;object-fit:contain;}
+  .modal-body .figwrap .figcap{font-size:12.3px;color:var(--muted);margin-top:8px;}
+  .modal-split{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);gap:22px;align-items:start;}
+  @media (max-width:960px){.modal-split{grid-template-columns:1fr;}}
+  .modal-split .analysis{border-left:3px solid var(--accent);background:#fdfbf8;border-radius:0 6px 6px 0;padding:14px 18px;}
+  .modal-split .analysis h4{font-size:14px;color:var(--accent);margin-bottom:8px;}
+  .modal-split .analysis ul.tick li{font-size:13.2px;}
+  .m-btnrow{display:flex;justify-content:flex-end;padding:0 26px 18px;}
+  .m-btn{padding:7px 22px;border-radius:20px;border:1px solid var(--blue);background:var(--blue);color:#fff;font-size:13px;cursor:pointer;}
+  .m-btn:hover{background:var(--accent);border-color:var(--accent);}
+  .tpl{display:none;}
+  /* ============ 术语悬浮解释（congruence 变换 / Loewner 序） ============ */
+  .term{position:relative;color:var(--blue);font-weight:600;border-bottom:1.5px dashed rgba(44,95,138,.55);cursor:help;white-space:normal;}
+  .term:hover{color:var(--accent);border-bottom-color:var(--accent);}
+  .term .term-tip{display:none;position:absolute;left:50%;top:calc(100% + 10px);transform:translateX(-50%);width:min(430px,78vw);padding:13px 16px;background:var(--ink);color:#e8ecf2;font-size:12.6px;line-height:1.8;font-weight:400;text-align:left;border-radius:8px;box-shadow:0 10px 30px rgba(15,23,42,.35);z-index:60;}
+  .term .term-tip::before{content:"";position:absolute;left:50%;top:-6px;transform:translateX(-50%) rotate(45deg);width:11px;height:11px;background:var(--ink);}
+  .term .term-tip b{color:#f0d9a8;font-weight:700;}
+  .term .term-tip .warn{display:block;margin:6px 0 4px;color:#ffb4a6;}
+  .term .term-tip .katex{color:#e8ecf2;font-size:1.02em;}
+  .term:hover .term-tip{display:block;}
+  /* 回到顶部 */
+  .backtop{position:fixed;right:28px;bottom:28px;width:42px;height:42px;border-radius:50%;background:var(--ink);color:#fff;border:none;cursor:pointer;font-size:17px;box-shadow:0 4px 14px rgba(20,31,51,.3);opacity:0;pointer-events:none;transition:opacity .25s;z-index:15;}
+  .backtop.show{opacity:.9;pointer-events:auto;}
+  .backtop:hover{opacity:1;}
+  /* 打印 */
+  @media print{
+    .sidebar,.progress,.backtop,.modal-overlay{display:none;}
+    .main{margin:0;}
+    .slide{border:none;box-shadow:none;page-break-inside:avoid;max-width:100%;padding:20px 0;margin-bottom:10px;}
+  }
+</style>
+</head>
+<body>
+
+<!-- ================= 侧边导航 ================= -->
+<aside class="sidebar">
+  <div class="brand">
+    <div class="kicker">毕业设计 · 组会汇报</div>
+    <h1>传感器失效下的<br>随机配置算法研究</h1>
+    <div class="sub">V2.1 · 理论证明详解 + 实验图文 + 投稿规划</div>
+  </div>
+  <nav class="nav" id="nav">
+    <div class="nav-group">开 篇</div>
+    <div class="nav-item active" data-i="0"><span class="no">01</span>封面与汇报要点</div>
+    <div class="nav-item" data-i="1"><span class="no">02</span>研究背景与动机</div>
+    <div class="nav-item" data-i="2"><span class="no">03</span>问题建模：双重随机性</div>
+    <div class="nav-group">算 法 与 定 理</div>
+    <div class="nav-item" data-i="3"><span class="no">04</span>算法设计：one-shot WR</div>
+    <div class="nav-item" data-i="4"><span class="no">05</span>引理 1 · 无偏性与一致控制</div>
+    <div class="nav-item" data-i="5"><span class="no">06</span>定理 1 · Ahlswede–Winter 路径</div>
+    <div class="nav-item" data-i="6"><span class="no">07</span>定理 2 · 矩阵 Chernoff 路径</div>
+    <div class="nav-item" data-i="7"><span class="no">08</span>定理 3 · Minsker 有效秩路径</div>
+    <div class="nav-item" data-i="8"><span class="no">09</span>三条证明路径对比</div>
+    <div class="nav-group">验 证 与 定 位</div>
+    <div class="nav-item" data-i="9"><span class="no">10</span>实验验证：核心结果</div>
+    <div class="nav-item" data-i="10"><span class="no">11</span>参数敏感性：卡片式图文分析</div>
+    <div class="nav-item" data-i="11"><span class="no">12</span>创新点 · 与 Bopardikar (2021) 对比</div>
+    <div class="nav-item" data-i="12"><span class="no">13</span>期刊投稿建议</div>
+    <div class="nav-item" data-i="13"><span class="no">14</span>局限、展望与总结</div>
+  </nav>
+  <div class="foot">
+    <b>唐星泽</b> · 徐特立学院<br>
+    指导教师：张元<br>
+    北京理工大学 · 2026 年 9 月
+  </div>
+</aside>
+
+<!-- 阅读进度 -->
+<div class="progress"><div class="bar" id="bar"></div></div>
+
+<!-- ================= 主内容 ================= -->
+<main class="main">
+<div class="content">
+
+<!-- ===== 01 封面 ===== -->
+<section class="slide cover" id="sec-0">
+  <div class="kicker">本科生毕业设计 · 阶段性工作汇报</div>
+  <h1>传感器失效下的随机配置算法研究</h1>
+  <div class="en">Research on Randomized Sensor Placement Algorithms under Sensor Failures</div>
+  <div class="meta">
+    <div><b>汇报人</b><span>唐星泽</span></div>
+    <div><b>指导教师</b><span>张元</span></div>
+    <div><b>学院 / 专业</b><span>徐特立学院 · 自动化</span></div>
+    <div><b>汇报场合</b><span>组会 · 2026 年 9 月</span></div>
+  </div>
+  <div style="margin-top:34px;" class="card">
+    <h4>本次汇报的三个核心问题</h4>
+    <ul class="tick">
+      <li><b>做了什么：</b>提出故障感知的带放回随机配置算法 one-shot WR，将伯努利传感器失效显式嵌入采样分布与重加权机制；</li>
+      <li><b>证了什么：</b>沿三条矩阵浓缩不等式路径（AW / Chernoff / Minsker）建立高概率谱夹紧保证与样本复杂度界，每条证明均可逐步展开查看完整推导；</li>
+      <li><b>能不能投：</b>与 <a class="ref" href="https://www.sciencedirect.com/science/article/pii/S0005109820305409" target="_blank">Bopardikar (Automatica 2021)</a> 的差异是实质性的——故障模型改变了估计量本身，且后两条证明路径为新的分析，请老师评估投稿定位（见第 13 节）。</li>
+    </ul>
+  </div>
+  <div class="hint">操作：点击左侧目录跳转章节；<b>定理证明的每个关键步骤、实验的每张参数卡片均可点击</b>，弹出完整文字+公式推导或"图+分析"详情；顶部细条为阅读进度。公式由 KaTeX 渲染，需联网加载。</div>
+</section>
+
+<!-- ===== 02 背景 ===== -->
+<section class="slide" id="sec-1">
+  <h2><span class="idx">02</span>研究背景与动机</h2>
+  <div class="rule"></div>
+  <h3 class="sec">传感器配置的核心矛盾：少资源 VS 足信息</h3>
+  <div class="cols">
+    <div class="card">
+      <h4>问题本质</h4>
+      <p>在大量的传感器候选位置中选择<b>少量观测点</b>，使系统在保持足够<b>全局可观性</b>的前提下兼顾成本与可靠性。大规模系统中，传感器配置直接影响状态估计、故障诊断与系统可观性。</p>
+      <p class="small">不只是"选择少量传感器"，而是"故障后仍保持关键方向可观"。</p>
+    </div>
+    <div class="card">
+      <h4>典型应用场景</h4>
+      <ul class="tick">
+        <li>航空结构健康监测（大规模机载传感网络）；</li>
+        <li>可穿戴设备连续生理监测；</li>
+        <li>交通 / 能源等复杂网络的态势感知。</li>
+      </ul>
+      <p class="small">工程约束：传感器数量、安装成本、能耗、通信带宽和维护代价均受限。</p>
+    </div>
+  </div>
+  <h3 class="sec">传统配置困境："维度爆炸"与"故障鲁棒"间进退两难</h3>
+  <div class="cols">
+    <div class="card" style="border-left:3px solid var(--blue);">
+      <h4>确定性算法流派 —— 计算瓶颈</h4>
+      <ul class="tick">
+        <li><b>精确求解类</b>（分支定界、交换算法）：追求全局最优，适合小规模离散设计，但候选集增大时面临 <b>NP-hard 的指数级组合爆炸</b>；</li>
+        <li><b>凸松弛类</b>（SDP 半正定规划）：离散变量连续化后舍入，可计算性提升，但代价随状态维数<b>立方级增长</b>；</li>
+        <li><b>贪婪近似类</b>（基于次模性）：效率高，但 \(\lambda_{\min}\)（E-最优）等目标<b>并非严格次模</b>，理论下界难保证；</li>
+        <li><b>元启发式</b>（遗传、粒子群）：约束适应性强，但<b>缺乏严格数学概率保证</b>。</li>
+      </ul>
+    </div>
+    <div class="card" style="border-left:3px solid var(--accent);">
+      <h4>随机化算法流派 —— 破局思路</h4>
+      <p><b>概率保证下的随机采样</b>：规避全量遍历，借助矩阵浓缩工具提供严格下界，是解决高维容错的前沿路径。</p>
+      <ul class="tick">
+        <li>现有确定性方法求解代价呈指数 / 立方级增长，<b>计算瓶颈</b>；</li>
+        <li>现有算法局限于<b>理想无故障场景</b>，故障鲁棒缺失；</li>
+        <li>现有理论保证过于保守甚至无法保证性能，<b>理论缺口</b>。</li>
+      </ul>
+      <p class="small">范式转变："绝对最优" → "高概率容错"。</p>
+    </div>
+  </div>
+  <h3 class="sec">研究目标与核心贡献</h3>
+  <div class="cols-4">
+    <div class="card"><h4>① 建模</h4><p>构造"随机配置—随机故障—随机矩阵和"的统一分析对象。</p></div>
+    <div class="card"><h4>② 算法</h4><p>提出故障感知带放回随机采样配置算法 one-shot WR。</p></div>
+    <div class="card"><h4>③ 理论</h4><p>给出 AW、Chernoff、Minsker 三类矩阵浓缩不等式下的样本复杂度保证。</p></div>
+    <div class="card"><h4>④ 实验</h4><p>在"社区结构"系统中验证鲁棒性、效率和参数敏感性。</p></div>
+  </div>
+  <div class="keypoint"><b>缺口定位：</b>「随机配置 + 伯努利随机故障 + E-最优高概率理论」的统一框架此前缺失——已有容错研究多面向最坏情形故障 / 稀疏攻击；已有随机配置研究（<a class="ref" href="https://www.sciencedirect.com/science/article/pii/S0005109820305409" target="_blank">Bopardikar, Automatica 2021</a>）不建模传感器随机失效。本文问题：<b>若每个传感器以概率 \(1-p_i\) 独立失效，随机配置还能否保持对全量基线的谱近似？</b></div>
+</section>
+
+<!-- ===== 03 建模 ===== -->
+<section class="slide" id="sec-2">
+  <h2><span class="idx">03</span>问题建模：把「配置 + 故障」统一为随机矩阵和</h2>
+  <div class="rule"></div>
+  <h3 class="sec">第一步：离散线性系统与全量基线</h3>
+  <div class="cols">
+    <div>
+      <p>离散线性系统与单个传感器的有限时域可观 Gramian 贡献：</p>
+      <div class="formula-center">\[ x(k{+}1)=Ax(k),\quad y(k)=Cx(k) \]</div>
+      <div class="formula-center">\[ W_i(T)=\sum_{t=0}^{T-1}(A^{t})^{\top}c_i^{\top}c_iA^{t}\ \succeq 0 \]</div>
+      <p>其中 \(c_i\) 为 \(C\) 的第 \(i\) 行，\(W_i\) 是有限时域可观 Gramian 的<b>半正定分量</b>。</p>
+    </div>
+    <div>
+      <p><b>全量性能基线</b>（无故障、系统全覆盖下的理想可观性，作为标尺）：</p>
+      <div class="formula-center">\[ W_{\text{full}}=\sum_{i=1}^{m}W_i \]</div>
+      <p>从优化"确定性 Gramian"转向控制"<b>随机故障后 Gramian 的极端特征值</b>"。</p>
+    </div>
+  </div>
+  <h3 class="sec">第二步：引入伯努利存活指示变量 → 双重随机性耦合</h3>
+  <p>第 \(i\) 个传感器存活指示 \(\xi_i\sim\mathrm{Bernoulli}(p_i)\)，\(p_i\in(0,1]\)（同质 \(p_i\equiv p\) 或异质 \(p_i\)）。故障后系统全局 Gramian：</p>
+  <div class="formula-center">\[ W_{S,\xi}=\sum_{i\in S}\xi_i W_i \]</div>
+  <div class="cols" style="margin-top:8px;">
+    <div class="card">
+      <h4>两层不确定性叠加（核心困难）</h4>
+      <ul class="tick">
+        <li><b>配置随机性 \(S\)</b>：由随机算法生成（哪些位置被选中）；</li>
+        <li><b>故障随机性 \(\xi\)</b>：已配置传感器又被随机删失（哪些传感器存活）；</li>
+        <li>二者<b>深度耦合</b>：性能对象是随机 Gramian，需高概率刻画而非期望优化。</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>优化目标的跃升：从期望到概率约束</h4>
+      <p>【目标一】期望性能优化：\(\max \lambda_{\min}\big(E[W_{S,\xi}]\big)\) —— <b>掩盖了单次极端故障带来的致命退化风险</b>；</p>
+      <p>【目标二】概率约束优化（本文采用）：
+      \[ \Pr\big\{\lambda_{\min}(W_{S,\xi})\ge\alpha\big\}\ge 1-\delta \]</p>
+      <p class="small">阈值 \(\alpha=(1-\varepsilon)\lambda_{\min}(W_{\text{full}})\)，确保系统可观性不发生本质退化的高概率底线。</p>
+    </div>
+  </div>
+  <h3 class="sec">第三步：指标评估——为什么选 E-最优</h3>
+  <div class="cols-4">
+    <div class="card"><h4>A-最优</h4><p>公式：\(\min \mathrm{tr}(W^{-1})\)<br>作用：压低平均估计误差。<br><b>局限：</b>可能掩盖个别极度薄弱方向的极大误差。</p></div>
+    <div class="card"><h4>D-最优</h4><p>公式：\(\min \det(W^{-1})\)<br>作用：最小化误差椭球体积。<br><b>局限：</b>总体信息量大不代表各方向均无盲区。</p></div>
+    <div class="card"><h4>T-最优</h4><p>公式：\(\max \mathrm{tr}(W)\)<br>作用：提升总能量。<br><b>局限：</b>资源扎堆在强可观方向，强者恒强。</p></div>
+    <div class="card" style="border:1px solid var(--accent);background:var(--accent-soft);"><h4 style="color:var(--accent);">E-最优（本文）</h4><p>公式：\(\max \lambda_{\min}(W)\)<br>作用：强化<b>最弱方向</b>，提升最差状态分量的估计可靠性。<br><b>优势：</b>防止关键位置失效导致系统局部盲化，最具鲁棒针对性。</p></div>
+  </div>
+  <div class="keypoint"><b>直觉（木桶效应）：</b>随机故障下，最先崩溃的往往是<b>信息最薄弱的方向</b>——E-最优天然匹配该风险结构；A/D/T 最优不区分方向强弱。<b>技术路线：</b>不直接解组合优化，而是设计一次性采样 + 重加权，把问题化为「独立 PSD 随机矩阵和的浓缩」，用矩阵不等式间接给出 \(\lambda_{\min}\) 的高概率下界。</div>
+</section>
+
+<!-- ===== 04 算法 ===== -->
+<section class="slide" id="sec-3">
+  <h2><span class="idx">04</span>算法设计：故障感知带放回采样（one-shot WR）</h2>
+  <div class="rule"></div>
+  <h3 class="sec">符号总表（本节及全部定理通用）</h3>
+  <table>
+    <thead>
+      <tr><th style="width:12%;">符号</th><th style="width:30%;">含义</th><th>定义 / 说明</th></tr>
+    </thead>
+    <tbody>
+      <tr><td class="num">\(n,\ m,\ T\)</td><td>状态维数 / 候选位置数 / 观测时域</td><td>系统 \(x(k{+}1)=Ax(k),\,y(k)=Cx(k)\)，\(C\) 的每一行对应一个候选位置</td></tr>
+      <tr><td class="num">\(W_i,\ W\)</td><td>第 \(i\) 位置的 Gramian 贡献 / 全量基线</td><td>\(W_i=\sum_{t=0}^{T-1}(A^t)^\top c_i^\top c_i A^t\succeq0\)，\(W=\sum_{i=1}^m W_i\succ0\)（基线可观）</td></tr>
+      <tr><td class="num">\(\tau_i\)</td><td>第 \(i\) 位置的<b>最坏方向贡献度</b></td><td>\(\tau_i=\lambda_{\max}(W^{-1}W_i)\)：满足 \(W_i\preceq\tau_i W\) 的<b>最小常数</b>，即该位置相对基线 \(W\) 在最坏可观方向上的贡献强度</td></tr>
+      <tr><td class="num">\(p_i,\ \xi_i\)</td><td>第 \(i\) 位置存活概率 / 存活指示</td><td>\(\xi_i\sim\mathrm{Bernoulli}(p_i)\)，\(p_i\in(0,1]\)；同质时 \(p_i\equiv p\)</td></tr>
+      <tr><td class="num">\(S\)</td><td><b>归一化常数（复杂度关键量）</b></td><td>\(S=\sum_{i=1}^{m}\tau_i/p_i\)。由 \(q_i\) 归一化而来；且可验证对所有 \(i\)：\(\tau_i/(q_ip_i)\equiv S\)——即<b>所有活跃样本相对基线的谱上界被均衡为同一常数 \(S\)</b>，它将直接进入三条定理的样本复杂度</td></tr>
+      <tr><td class="num">\(q\)</td><td><b>故障感知采样分布</b></td><td>定义在 \(m\) 个候选位置上的<b>离散概率分布</b>（类别分布）：\(q_i=\dfrac{\tau_i/p_i}{S}\)，正比于"最坏方向贡献度 ÷ 存活概率"，\(\sum_i q_i=1\)</td></tr>
+      <tr><td class="num">\(c\)</td><td>采样次数（样本量）</td><td>带放回独立抽取的总次数，即理论保证的对象</td></tr>
+      <tr><td class="num">\(J_j\)</td><td>第 \(j\) 次采样抽中的位置索引</td><td>\(\Pr(J_j=i)=q_i\)，各次采样相互独立</td></tr>
+      <tr><td class="num">\(Z_j,\ \hat W\)</td><td>单样本随机矩阵 / 估计量</td><td>\(Z_j=\dfrac{\xi_j}{q_{J_j}p_{J_j}}W_{J_j}\succeq0\)，\(\hat W=\frac1c\sum_{j=1}^c Z_j\)（双重重加权：同时校正采样偏差与故障删失）</td></tr>
+      <tr><td class="num">\(\varepsilon,\ \delta\)</td><td>相对误差 / 失败概率</td><td>\(\varepsilon,\delta\in(0,1)\)：要求 \(\Pr\big((1-\varepsilon)W\preceq\hat W\preceq(1+\varepsilon)W\big)\ge1-\delta\)</td></tr>
+    </tbody>
+  </table>
+  <h3 class="sec">算法五步（先一行总览，后逐步展开）</h3>
+  <div class="steps">
+    <div class="step"><b>Step 1</b><span>计算各位置 Gramian 贡献 \(W_i\) 与全量基线 \(W=\sum_i W_i\)</span><span class="formula">\(W_i,\ W\)</span></div>
+    <div class="step"><b>Step 2</b><span>计算每个位置的最坏方向贡献度</span><span class="formula">\(\tau_i=\lambda_{\max}(W^{-1}W_i)\)</span></div>
+    <div class="step"><b>Step 3</b><span>构造故障感知分布并归一化，确定采样量 \(c\)</span><span class="formula">\(q_i=\dfrac{\tau_i/p_i}{S},\ S=\sum_i\tau_i/p_i\)</span></div>
+    <div class="step"><b>Step 4</b><span>按 \(q\) 做 \(c\) 次<b>独立带放回</b>采样 \(J_1,\dots,J_c\)；每次再抽 \(\xi_j\sim\mathrm{Bern}(p_{J_j})\) 判存活</span><span class="formula">\(J_j\sim q,\ \xi_j\sim\mathrm{Bern}(p_{J_j})\)</span></div>
+    <div class="step"><b>Step 5</b><span>输出重加权 Gramian 估计 \(\hat W\) 与实际支持集（各位置采样次数 \(n_i\)）</span><span class="formula">\(\hat W=\frac1c\sum_j \frac{\xi_j}{q_{J_j}p_{J_j}}W_{J_j}\)</span></div>
+  </div>
+  <div class="step-detail">
+    <div class="sd-row">
+      <div class="sd-no">Step 1<br>详解</div>
+      <div class="sd-body">给定系统矩阵 \(A\)、候选测量矩阵 \(C\)、时间窗口 \(T\) 与各位置存活概率 \(p_i\)。对每个候选位置，将其对应观测行 \(c_i\) 沿 \(A^t\)（\(t=0,\dots,T-1\)）传播并累加，得到该位置对可观性的<b>半正定贡献矩阵</b> \(W_i\)；全部相加得到全量基线 \(W\)。要求 \(W\succ0\)（全量系统可观），这是后续白化变换 \(W^{-1/2}\) 存在的前提。</div>
+    </div>
+    <div class="sd-row">
+      <div class="sd-no">Step 2<br>详解</div>
+      <div class="sd-body">对每个位置计算 \(\tau_i=\lambda_{\max}(W^{-1}W_i)\)。它是使不等式 \(W_i\preceq \gamma W\) 成立的<b>最小 \(\gamma\)</b>，因此 \(\tau_i\) 刻画"第 \(i\) 个位置相对全量基线、在最坏可观方向上的贡献强度"：\(\tau_i\) 大表示该位置可能在某个方向上独自贡献了很大比例的信息（例如社区间的桥接传感器）。</div>
+    </div>
+    <div class="sd-row">
+      <div class="sd-no">Step 3<br>详解</div>
+      <div class="sd-body"><b>\(q\) 是什么分布：</b>一个定义在候选位置集合 \(\{1,\dots,m\}\) 上的<b>离散概率分布</b>，\(\Pr(J=i)=q_i\)，取值 \(q_i=\frac{\tau_i/p_i}{\sum_k \tau_k/p_k}\)。分子"贡献度除以存活概率"意味着：<b>越重要且越易失效的位置，被抽中的概率越大</b>。采样量 \(c\) 由定理 1/2/3 的下界确定（如 AW 路径 \(c\ge\frac{4S}{\varepsilon^2}\ln\frac{2n}{\delta}\)）。<br><b>\(S\) 是什么：</b>归一化常数 \(S=\sum_i\tau_i/p_i\)，同时是所有活跃样本相对谱上界的<b>公共常数</b>：代入 \(q_i\) 可验证 \(\frac{\tau_i}{q_ip_i}=S\) 对所有 \(i\) 成立——该均衡性使 \(S\) 恰好成为三条定理中样本复杂度的系统相关量。</div>
+    </div>
+    <div class="sd-row">
+      <div class="sd-no">Step 4<br>详解</div>
+      <div class="sd-body">进行 \(c\) 次<b>独立、带放回</b>的抽样：每次按分布 \(q\) 抽中位置 \(J_j\)（同一位置可被重复抽中——这是"冗余"的来源）；随后独立地生成 \(\xi_j\sim\mathrm{Bernoulli}(p_{J_j})\) 模拟该传感器在运行期是否存活。允许重复采样是本算法区别于固定子集类方法（Top-s、WOR）的核心：关键桥接位置可以被<b>多次配置</b>以对冲故障。</div>
+    </div>
+    <div class="sd-row">
+      <div class="sd-no">Step 5<br>详解</div>
+      <div class="sd-body">统计各位置被抽中次数 \(n_i=\#\{j: J_j=i\}\)，输出重加权 Gramian 估计 \(\hat W=\frac1c\sum_{j=1}^c\frac{\xi_j}{q_{J_j}p_{J_j}}W_{J_j}\)（等价实现：\(\hat W=\sum_{i=1}^m \Gamma_i^2 W_i\)，\(\Gamma_i=\sqrt{n_i/(c\,q_ip_i)}\)）。重加权因子 \(\frac{1}{q_ip_i}\) 同时校正<b>采样偏差</b>（除以 \(q_i\)）与<b>故障删失</b>（除以 \(p_i\)），保证 \(E[\hat W]=W\)。</div>
+    </div>
+  </div>
+  <h3 class="sec">故障后加权 Gramian 估计量</h3>
+  <div class="thm lemma">
+    <span class="thm-tag">估计量</span>
+    \[ \hat W=\frac{1}{c}\sum_{j=1}^{c}Z_j,\qquad
+       Z_j=\frac{\xi_j}{q_{J_j}\,p_{J_j}}\,W_{J_j}\ \succeq 0 \]
+  </div>
+  <div class="cols">
+    <div class="card">
+      <h4>设计的两个直觉</h4>
+      <ul class="tick">
+        <li>\(\tfrac{1}{q_ip_i}\) 重加权同时校正<b>采样偏差与故障删失</b>，保证 \(E[\hat W]=W\)；</li>
+        <li>分布取 \(q_i\propto\tau_i/p_i\) 恰好<b>均衡所有样本的相对谱上界</b> \(\tau_i/(q_ip_i)\equiv S\)——这是最小化复杂度上界常数的最优解。</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>故障不是简单"打折扣"</h4>
+      <p>\(p_i\) 不是乘性惩罚项，而是进入<b>重要性分布的分母</b>：故障越频繁的高价值位置，越需要<b>更多采样冗余</b>去补偿。这解释了带放回设计为何能保护关键薄弱方向。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ===== 05 引理1 ===== -->
+<section class="slide" id="sec-4">
+  <h2><span class="idx">05</span>引理 1：无偏性与一致控制（全部定理的基石）</h2>
+  <div class="rule"></div>
+  <div class="thm lemma">
+    <span class="thm-tag">引理 1</span><span class="thm-name">（无偏性与一致控制）</span>
+    <div class="body">
+      对上述估计量 \(\hat W\)，有
+      \[ E[\hat W]=W \qquad(\text{对全量基线无偏}) \]
+      进一步定义白化归一化项
+      \[ Y_k=W^{-\frac12}\Big(\frac{\xi_k}{c\,q_{J_k}p_{J_k}}W_{J_k}\Big)W^{-\frac12} \]
+      则
+      \[ 0\ \preceq\ Y_k\ \preceq\ \frac{S}{c}\,I,\qquad E\Big[\sum_{k=1}^{c}Y_k\Big]=I \]
+    </div>
+  </div>
+  <div class="proof">
+    <span class="pf-tag">证明.</span><span class="pf-note">点击每个步骤查看完整推导（文字 + 公式）</span>
+    <div class="pstep" data-tpl="tpl-l1s1">
+      <div class="ps-head"><span class="ps-no">步骤 1</span><span class="ps-title">无偏性（全期望公式）</span><span class="ps-cta">完整推导</span></div>
+      <div class="ps-brief">条件于 \(J_1=i\) 时存活概率 \(p_i\) 恰被重加权分母抵消，再对 \(J_1\) 取期望得 \(E[\hat W]=W\)。</div>
+    </div>
+    <div class="pstep" data-tpl="tpl-l1s2">
+      <div class="ps-head"><span class="ps-no">步骤 2</span><span class="ps-title">一致上界（白化 + 相似矩阵同谱）</span><span class="ps-cta">完整推导</span></div>
+      <div class="ps-brief">由 \(W^{-1/2}W_iW^{-1/2}\preceq\tau_iI\) 与 \(q_i=\tau_i/(p_iS)\)，得 \(0\preceq Y_k\preceq\frac{S}{c}I\)；线性性给出 \(E[\sum Y_k]=I\)。</div>
+    </div>
+  </div>
+  <div class="keypoint"><b>为什么关键：</b>「期望为 \(I\) + 一致界 \(S/c\)」正是三条矩阵浓缩不等式共同需要的输入形式；故障感知设计使 \(S=\sum\tau_i/p_i\)（而非无故障时的 \(\sum\tau_i\)）成为复杂度的唯一「系统相关常数」——<b>故障概率由此显式进入理论</b>。</div>
+</section>
+
+<!-- ===== 06 定理1 ===== -->
+<section class="slide" id="sec-5">
+  <h2><span class="idx">06</span>定理 1：Ahlswede–Winter 路径的高概率谱夹紧</h2>
+  <div class="rule"></div>
+  <div class="thm">
+    <span class="thm-tag">定理 1</span><span class="thm-name">（高概率谱夹紧 · Ahlswede–Winter）</span>
+    <div class="body">
+      设 \(W\succ0\)，\(\varepsilon,\delta\in(0,1)\)，\(Z_1,\dots,Z_c\) 为故障感知模型的独立样本。若
+      \[ c\ \ge\ \frac{4S}{\varepsilon^{2}}\ln\frac{2n}{\delta}
+        \;=\; \frac{4}{\varepsilon^{2}}\Big(\sum_{i=1}^{m}\frac{\lambda_{\max}(W^{-1}W_i)}{p_i}\Big)\ln\frac{2n}{\delta} \]
+      则
+      \[ \Pr\Big((1-\varepsilon)W\ \preceq\ \hat W\ \preceq\ (1+\varepsilon)W\Big)\ \ge\ 1-\delta \]
+      从而 \(\Pr\big(\lambda_{\min}(\hat W)\ge(1-\varepsilon)\lambda_{\min}(W)\big)\ge1-\delta\)。
+    </div>
+  </div>
+
+  <div class="orig-thm">
+    <div class="orig-head"><span class="tag">支撑原定理</span><span class="t">Ahlswede–Winter 不等式（本文所用形式）</span><span class="arrow">▶</span></div>
+    <div class="orig-body">
+      <p>设 \(Z\) 是 \(n\times n\) 随机对称半正定矩阵，\(U=E[Z]\)，且几乎必然有 \(Z\preceq\rho U\)（\(\rho\ge1\)）。令 \(Z_1,\dots,Z_c\) 为 \(Z\) 的独立同分布样本，则对任意 \(\varepsilon\in(0,1)\)：</p>
+      \[ \Pr\Big((1-\varepsilon)U\ \preceq\ \frac1c\sum_{k=1}^{c}Z_k\ \preceq\ (1+\varepsilon)U\Big)\ \ge\ 1-2n\,e^{-\varepsilon^2 c/4\rho} \]
+      <p class="small" style="margin-top:8px;">该不等式率先将 Laplace 变换法与迹指数不等式系统性引入随机矩阵尾界分析，其证明依赖 <b>Golden–Thompson 不等式</b>；矩阵 Chernoff 界可视为其后续发展。本文应用时的对应关系：\(U\to W\)，\(\rho\to S\)，\(Z_k\to Z_j\)。</p>
+      <div class="src">原始文献：<a class="ref" href="https://ieeexplore.ieee.org/document/985947" target="_blank">Ahlswede &amp; Winter, "Strong converse for identification via quantum channels," IEEE Trans. Inf. Theory 48(3): 569–579, 2002</a>（矩阵不等式在附录中给出）· 本文所用常用形式的出处：<a class="ref" href="https://www.sciencedirect.com/science/article/pii/S0005109820305409" target="_blank">Bopardikar, Automatica 2021, 定理 A.1</a>（对原始结果的可直接引用表述）与 <a class="ref" href="https://arxiv.org/abs/1501.01571" target="_blank">Tropp 教程专著（arXiv:1501.01571）</a></div>
+    </div>
+  </div>
+
+  <div class="proof">
+    <span class="pf-tag">证明关键三步.</span><span class="pf-note">点击每个步骤查看完整推导（文字 + 公式）</span>
+    <div class="pstep" data-tpl="tpl-t1s1">
+      <div class="ps-head"><span class="ps-no">步骤 1</span><span class="ps-title">构造与期望：验证 \(E[Z_j]=W\)</span><span class="ps-cta">完整推导</span></div>
+      <div class="ps-brief">利用 \(J_j\) 与 \(\xi_j\) 独立，对"存活 / 失效"两种情形取期望，求和得 \(E[Z_j]=W\)。</div>
+    </div>
+    <div class="pstep" data-tpl="tpl-t1s2">
+      <div class="ps-head"><span class="ps-no">步骤 2</span><span class="ps-title">统一相对上界 \(\rho=S\) 及 \(\rho\ge1\) 验证</span><span class="ps-cta">完整推导</span></div>
+      <div class="ps-brief">先证 \(W_i\preceq\tau_iW\)（相似矩阵同谱），再证存活时 \(Z_j\preceq SW\)、失效时 \(Z_j=0\)；由 \(\sum\tau_i\ge1,\ p_i\le1\) 得 \(\rho=S\ge1\)。</div>
+    </div>
+    <div class="pstep" data-tpl="tpl-t1s3">
+      <div class="ps-head"><span class="ps-no">步骤 3</span><span class="ps-title">代入 AW 不等式并反解 \(c\)</span><span class="ps-cta">完整推导</span></div>
+      <div class="ps-brief">代入得概率下界 \(1-2ne^{-\varepsilon^2c/4S}\)，令其 \(\ge1-\delta\) 即得采样量下界。\(\blacksquare\)</div>
+    </div>
+  </div>
+  <div class="keypoint"><b>结论解读：</b>故障对样本复杂度的影响<b>不是乘一个平均存活率</b>，而是将关键量从 \(\sum\tau_i\) 替换为 \(S=\sum\tau_i/p_i\)——<b>任一关键位置可靠性下降都会以 \(1/p_i\) 的方式放大采样需求</b>。技术上本证明沿用了 <a class="ref" href="https://www.sciencedirect.com/science/article/pii/S0005109820305409" target="_blank">Bopardikar (Automatica 2021)</a> 的 AW 框架，但分析对象换成了故障删失后的重加权估计量（该论文中不存在）。</div>
+</section>
+
+<!-- ===== 07 定理2 ===== -->
+<section class="slide" id="sec-6">
+  <h2><span class="idx">07</span>定理 2：矩阵 Chernoff 路径（更紧的常数）</h2>
+  <div class="rule"></div>
+  <div class="thm">
+    <span class="thm-tag">定理 2</span><span class="thm-name">（高概率谱阈值保证 · 矩阵 Chernoff）</span>
+    <div class="body">
+      同定理 1 的设定。若
+      \[ c\ \ge\ S\cdot\max\Bigg\{
+         \frac{\ln(2n/\delta)}{-\ln\!\big[\tfrac{e^{-\varepsilon}}{(1-\varepsilon)^{1-\varepsilon}}\big]},\ \
+         \frac{\ln(2n/\delta)}{-\ln\!\big[\tfrac{e^{\varepsilon}}{(1+\varepsilon)^{1+\varepsilon}}\big]}
+         \Bigg\} \]
+      则 \(\Pr\big((1-\varepsilon)W\preceq\hat W\preceq(1+\varepsilon)W\big)\ge1-\delta\)。
+    </div>
+  </div>
+
+  <div class="orig-thm">
+    <div class="orig-head"><span class="tag">支撑原定理</span><span class="t">矩阵 Chernoff 不等式（Tropp 统一表述）</span><span class="arrow">▶</span></div>
+    <div class="orig-body">
+      <p>设 \(X_1,\dots,X_c\) 为独立随机 Hermitian 矩阵，满足 \(0\preceq X_k\preceq LI\)。令 \(Y=\sum_k X_k\)，\(\mu_{\min}=\lambda_{\min}(E[Y])\)，\(\mu_{\max}=\lambda_{\max}(E[Y])\)，则：</p>
+      \[ \Pr\big(\lambda_{\min}(Y)\le(1-\varepsilon)\mu_{\min}\big)\le n\Big[\tfrac{e^{-\varepsilon}}{(1-\varepsilon)^{1-\varepsilon}}\Big]^{\mu_{\min}/L},\quad \varepsilon\in[0,1) \]
+      \[ \Pr\big(\lambda_{\max}(Y)\ge(1+\varepsilon)\mu_{\max}\big)\le n\Big[\tfrac{e^{\varepsilon}}{(1+\varepsilon)^{1+\varepsilon}}\Big]^{\mu_{\max}/L},\quad \varepsilon\ge0 \]
+      <p class="small" style="margin-top:8px;">即：独立 PSD 矩阵和的极特征值以高概率被其期望矩阵的极特征值所控制，偏离概率随维度 \(n\) 与上界 \(L\) 呈指数衰减。本文应用时的对应关系：\(X_k\to X_j\)（白化后的单样本）、\(L\to S/c\)、\(\mu_{\min}=\mu_{\max}=1\)。</p>
+      <div class="src">原始文献：<a class="ref" href="https://arxiv.org/abs/1501.01571" target="_blank">Tropp, "An Introduction to Matrix Concentration Inequalities," Foundations and Trends in Machine Learning 8(1–2), 2015（arXiv:1501.01571；矩阵 Chernoff 见第 5 章，p. 60）</a> · 亦可参见 <a class="ref" href="https://arxiv.org/abs/1004.4389" target="_blank">Tropp, "User-friendly tail bounds for sums of random matrices," Found. Comput. Math. 12(4), 2012（arXiv:1004.4389）</a></div>
+    </div>
+  </div>
+
+  <div class="proof">
+    <span class="pf-tag">证明关键四步.</span><span class="pf-note">点击每个步骤查看完整推导（文字 + 公式）</span>
+    <div class="pstep" data-tpl="tpl-t2s1">
+      <div class="ps-head"><span class="ps-no">步骤 1</span><span class="ps-title">白化与独立性</span><span class="ps-cta">完整推导</span></div>
+      <div class="ps-brief">令 \(X_j=\frac1c W^{-1/2}Z_jW^{-1/2}\)；\(W\succ0\) 保证白化保持 <span class="term">Loewner 序<span class="term-tip"><b>Loewner 序（半正定序）</b>：对称矩阵 \(A\preceq B\iff B-A\succeq0\)（半正定，即所有特征值 \(\ge0\)）。<b>物理意义</b>：\(B\) 包含的信息（能量）不少于 \(A\)——传感器配置中即观测信息量。<b>保序性</b>：可逆 congruence 变换 \(A\mapsto P^{T}\!AP\) 严格保持 Loewner 序；相似变换则不保此序。</span></span>，抽样独立 + 故障独立 \(\Rightarrow X_j\) 独立。</div>
+    </div>
+    <div class="pstep" data-tpl="tpl-t2s2">
+      <div class="ps-head"><span class="ps-no">步骤 2</span><span class="ps-title">验证 Chernoff 条件：上界 \(L=S/c\) 与期望 \(\mu_{\min}=\mu_{\max}=1\)</span><span class="ps-cta">完整推导</span></div>
+      <div class="ps-brief">由引理 1 的界 \(0\preceq X_j\preceq\frac{S}{c}I\)；且 \(E[\sum_jX_j]=I\)。</div>
+    </div>
+    <div class="pstep" data-tpl="tpl-t2s3">
+      <div class="ps-head"><span class="ps-no">步骤 3</span><span class="ps-title">双侧尾界 + 联合界</span><span class="ps-cta">完整推导</span></div>
+      <div class="ps-brief">矩阵 Chernoff 给出上下两尾各 \(\le n[\cdot]^{c/S}\)；令两尾各 \(\le\delta/2\)，并用 \(Y=\sum X_j=W^{-1/2}\hat WW^{-1/2}\) 的等价事件转回 \(\hat W\)。</div>
+    </div>
+    <div class="pstep" data-tpl="tpl-t2s4">
+      <div class="ps-head"><span class="ps-no">步骤 4</span><span class="ps-title">取对数反解 \(c\)</span><span class="ps-cta">完整推导</span></div>
+      <div class="ps-brief">对两个不等式分别取对数整理，即得所证的 max 形式采样数充分条件。\(\blacksquare\)</div>
+    </div>
+  </div>
+  <div class="keypoint"><b>与定理 1 的关系：</b>同为 \(O\big(S\,\varepsilon^{-2}\log(n/\delta)\big)\) 量级，但 Chernoff 指数 \( \tfrac{e^{-\varepsilon}}{(1-\varepsilon)^{1-\varepsilon}} \) 给出<b>更优常数</b>——实验曲面测算约为 AW 界的 <b>0.53~0.56 倍</b>，更接近实际所需采样量，建议作为工程部署的主参考界。</div>
+</section>
+
+<!-- ===== 08 定理3 ===== -->
+<section class="slide" id="sec-7">
+  <h2><span class="idx">08</span>定理 3：Minsker 有效秩 Bernstein 路径</h2>
+  <div class="rule"></div>
+  <div class="thm">
+    <span class="thm-tag">定理 3</span><span class="thm-name">（有效秩 Bernstein 型概率保证）</span>
+    <div class="body">
+      定义中心化二阶矩与单样本偏差界：
+      \[ \Sigma:=E[(Z_1-W)^2],\quad \sigma_0^2:=\|\Sigma\|_2,\quad
+         r_{\mathrm{eff}}(\Sigma):=\frac{\mathrm{tr}(\Sigma)}{\|\Sigma\|_2},\quad
+         U_0:=\max\Big\{\max_{1\le i\le m}\Big\|\tfrac{W_i}{q_ip_i}-W\Big\|_2,\ \|W\|_2\Big\} \]
+      取 \(t=\varepsilon\lambda_{\min}(W)\)。若
+      \[ c\ \ge\ \max\Bigg\{\Big(\frac{2\sigma_0^2}{t^2}+\frac{2U_0}{3t}\Big)\ln\frac{14\,r_{\mathrm{eff}}(\Sigma)}{\delta},\quad
+         \frac{U_0}{3t}+\frac{\sigma_0^2}{t^2}\Bigg\} \]
+      则 \(\Pr\big((1-\varepsilon)W\preceq\hat W\preceq(1+\varepsilon)W\big)\ge1-\delta\)。
+    </div>
+  </div>
+
+  <div class="orig-thm">
+    <div class="orig-head"><span class="tag">支撑原定理</span><span class="t">Minsker 有效秩 Bernstein 不等式（定理 3.1）</span><span class="arrow">▶</span></div>
+    <div class="orig-body">
+      <p>设 \(X_1,\dots,X_c\in\mathbb{C}^{n\times n}\) 是一列独立的自伴随机矩阵，满足 \(E[X_i]=0\)。若存在常数 \(U&gt;0\)、\(\sigma^2&gt;0\)，使得几乎必然有 \(\|X_i\|\le U\) 对所有 \(i\) 成立，且 \(\sigma^2\ge\big\|\sum_i E[X_i^2]\big\|\)。令其和为 \(\mathcal S_c=\sum_{i=1}^{c}X_i\)，则对任意满足 \(t\ge\frac16\big(U+\sqrt{U^2+36\sigma^2}\big)\) 的 \(t\)，有：</p>
+      \[ \Pr\big(\|\mathcal S_c\|&gt;t\big)\ \le\ 14\,r\Big(\sum_{i=1}^{c}E[X_i^2]\Big)\cdot\exp\Big[-\frac{t^2/2}{\sigma^2+tU/3}\Big] \]
+      <p class="small" style="margin-top:8px;">其中有效秩 \(r(A)=\mathrm{tr}(A)/\|A\|\le n\)。该不等式将通常矩阵 Bernstein 不等式中的显式矩阵维数 \(d\) 替换为与二阶矩矩阵有关的<b>有效秩</b>（Hsu–Kakade–Zhang 首先系统提出"以迹与谱范数之比替代环境维度"的框架，Minsker 进一步发展）——当二阶矩矩阵的谱能量集中在少数主导方向时，\(r_{\mathrm{eff}}\ll n\)，尾界不再机械依赖名义维数。本文应用时的对应关系：\(X_i\to\tilde Y_j=Z_j-W\)、\(U\to U_0\)、\(\sigma^2\to c\sigma_0^2\)。</p>
+      <div class="src">原始文献：<a class="ref" href="https://www.sciencedirect.com/science/article/pii/S0167715217301207" target="_blank">Minsker, "On some extensions of Bernstein's inequality for self-adjoint operators," Statistics &amp; Probability Letters 127: 111–119, 2017</a></div>
+    </div>
+  </div>
+
+  <div class="proof">
+    <span class="pf-tag">证明关键五步.</span><span class="pf-note">点击每个步骤查看完整推导（文字 + 公式）</span>
+    <div class="pstep" data-tpl="tpl-t3s1">
+      <div class="ps-head"><span class="ps-no">步骤 1</span><span class="ps-title">中心化构造</span><span class="ps-cta">完整推导</span></div>
+      <div class="ps-brief">令 \(\tilde Y_j=Z_j-W\)（零均值、独立），\(\mathcal S_c=\sum\tilde Y_j=c(\hat W-W)\)；事件 \(\|\hat W-W\|_2&gt;t\Leftrightarrow\|\mathcal S_c\|_2&gt;ct\)。</div>
+    </div>
+    <div class="pstep" data-tpl="tpl-t3s2">
+      <div class="ps-head"><span class="ps-no">步骤 2</span><span class="ps-title">统一范数上界 \(U_0\)</span><span class="ps-cta">完整推导</span></div>
+      <div class="ps-brief">存活时 \(\tilde Y_j=\frac{W_i}{q_ip_i}-W\)，失效时 \(\tilde Y_j=-W\)，故几乎必然 \(\|\tilde Y_j\|_2\le U_0\)。</div>
+    </div>
+    <div class="pstep" data-tpl="tpl-t3s3">
+      <div class="ps-head"><span class="ps-no">步骤 3</span><span class="ps-title">方差代理与有效秩</span><span class="ps-cta">完整推导</span></div>
+      <div class="ps-brief">\(\sum_jE[\tilde Y_j^2]=c\Sigma\)，方差参数 \(\sigma^2=c\sigma_0^2\)；有效秩 \(r(c\Sigma)=r_{\mathrm{eff}}(\Sigma)\) 与 \(c\) 无关。</div>
+    </div>
+    <div class="pstep" data-tpl="tpl-t3s4">
+      <div class="ps-head"><span class="ps-no">步骤 4</span><span class="ps-title">代入 Minsker 不等式并反解 \(c\)（含技术条件）</span><span class="ps-cta">完整推导</span></div>
+      <div class="ps-brief">令尾概率 \(\le\delta\) 反解出主条件；同时验证技术条件 \(ct\ge\frac16(U_0+\sqrt{U_0^2+36c\sigma_0^2})\) 解得第二条件，取 max。</div>
+    </div>
+    <div class="pstep" data-tpl="tpl-t3s5">
+      <div class="ps-head"><span class="ps-no">步骤 5</span><span class="ps-title">由谱范数控制导出 PSD 夹逼</span><span class="ps-cta">完整推导</span></div>
+      <div class="ps-brief">\(\|\hat W-W\|_2\le t=\varepsilon\lambda_{\min}(W)\) 时，\(-\varepsilon W\preceq\hat W-W\preceq\varepsilon W\)。\(\blacksquare\)</div>
+    </div>
+  </div>
+  <div class="keypoint"><b>价值与代价：</b>维度因子 \(n\) 被<b>有效秩 \(r_{\mathrm{eff}}\)</b> 替代——二阶矩谱集中时 \(r_{\mathrm{eff}}\ll n\)，理论上利于高维低秩网络；但重加权因子 \(1/(q_ip_i)\) 会放大 \(U_0,\sigma_0^2\)，实验中该界比 Chernoff <b>保守 7 个数量级以上</b>，定位为保守上界与补充分析工具。</div>
+</section>
+
+<!-- ===== 09 对比 ===== -->
+<section class="slide" id="sec-8">
+  <h2><span class="idx">09</span>三条证明路径的统一对比</h2>
+  <div class="rule"></div>
+  <p class="lead">三条路径共用同一故障感知估计量与引理 1 的输入，差异在于浓缩工具与控制的统计量。所有支撑原定理均可在对应小节展开查看并附文献链接。</p>
+  <table>
+    <thead>
+      <tr><th style="width:15%;">路径</th><th style="width:24%;">理论工具（原定理出处）</th><th style="width:30%;">样本复杂度</th><th>特点与适用性</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><b>定理 1 · AW</b></td>
+        <td>非交换 Laplace 变换、Golden–Thompson 不等式（<a class="ref" href="https://ieeexplore.ieee.org/document/985947" target="_blank">A–W 2002</a>；常用形式见 <a class="ref" href="https://www.sciencedirect.com/science/article/pii/S0005109820305409" target="_blank">Bopardikar 2021, Thm A.1</a>）</td>
+        <td>\(c\ge\dfrac{4S}{\varepsilon^2}\ln\dfrac{2n}{\delta}\)</td>
+        <td>经典框架、证明最简洁；Bopardikar (2021) 同路径的无故障版关键量为 \(\sum\tau_i\)，本文替换为 \(S=\sum\tau_i/p_i\)</td>
+      </tr>
+      <tr>
+        <td><b>定理 2 · Chernoff</b></td>
+        <td>独立 PSD 矩阵和的极特征值尾界（<a class="ref" href="https://arxiv.org/abs/1501.01571" target="_blank">Tropp 2015 专著第 5 章</a>；<a class="ref" href="https://arxiv.org/abs/1004.4389" target="_blank">Tropp 2012</a>）</td>
+        <td>\(c\ge S\cdot\max\{\cdot,\cdot\}\)（精确 Chernoff 指数）</td>
+        <td class="good">常数最优（≈AW 的 0.53~0.56 倍），现实部署首选参考</td>
+      </tr>
+      <tr>
+        <td><b>定理 3 · Minsker</b></td>
+        <td>有效秩 Bernstein 型不等式（<a class="ref" href="https://www.sciencedirect.com/science/article/pii/S0167715217301207" target="_blank">Minsker 2017, Thm 3.1</a>）</td>
+        <td>含 \(\sigma_0^2, U_0, r_{\mathrm{eff}}(\Sigma)\)</td>
+        <td>维度 \(n\to r_{\mathrm{eff}}\)，利于高维低秩；但重加权放大 \(U_0,\sigma_0^2\)，实测保守 7+ 个数量级</td>
+      </tr>
+    </tbody>
+  </table>
+  <div class="cols">
+    <div class="card">
+      <h4>方法论贡献</h4>
+      <p>首次把 AW、Chernoff、Minsker 三条浓缩分析路线<b>统一到同一个传感器失效模型之下</b>，澄清了各样本复杂度公式中参数（\(S\)、\(L\)、\(\sigma^2\)、\(r_{\mathrm{eff}}\)）的来源与适用边界。</p>
+    </div>
+    <div class="card">
+      <h4>共同结论</h4>
+      <p>只要采样量足够，one-shot WR 在<b>传感器随机失效后</b>仍以概率 \(\ge1-\delta\) 保持 \((1-\varepsilon)W\preceq\hat W\)，即故障不造成可观性的本质退化；复杂度对 \(\varepsilon\) 呈 \(\varepsilon^{-2}\)、对 \(\delta\) 呈 \(\log\)、对故障呈 \(\sum\tau_i/p_i\) 依赖。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ===== 10 实验核心结果 ===== -->
+<section class="slide" id="sec-9">
+  <h2><span class="idx">10</span>实验验证：社区结构系统上的核心结果</h2>
+  <div class="rule"></div>
+  <p class="lead">设置：\(n=100\)，\(m=1000\)，\(T=300\)，同质 \(p=0.8\)，\(s=c=800\)，\(\varepsilon=0.3\)，\(\delta=0.3\)，Monte Carlo \(10^4\) 次；成功判据 \(\lambda_{\min}(\hat W_{\mathrm{fail}})\ge\alpha=0.2176\)（全量 \(\lambda_{\min}(W)=0.3108\)）。社区结构系统：4 社区、社区内强耦合 + 桥接弱连接 → 天然形成跨社区弱可观方向，考验算法对薄弱模态的保护。</p>
+  <table>
+    <thead>
+      <tr><th>算法</th><th>故障后成功率</th><th>\(E[\lambda_{\min}(\hat W_{\mathrm{fail}})]\)</th><th>配置耗时</th><th>占用位置数</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>FULL（全量基线）</td><td>86.39%</td><td class="num">0.2336</td><td class="num">0.01 s</td><td class="num">1000</td></tr>
+      <tr><td>Greedy-\(\lambda_{\min}\)</td><td class="bad">19.75%</td><td class="num">0.2051</td><td class="num">325.09 s</td><td class="num">800</td></tr>
+      <tr><td>Greedy-Exp（故障感知贪心）</td><td class="bad">22.16%</td><td class="num">0.2057</td><td class="num">159.79 s</td><td class="num">800</td></tr>
+      <tr><td>Top-s（故障感知评分）</td><td class="bad">21.54%</td><td class="num">0.2070</td><td class="num">0.46 s</td><td class="num">800</td></tr>
+      <tr><td>WOR（不放回采样）</td><td class="bad">0.03%</td><td class="num">0.1844</td><td class="num">0.47 s</td><td class="num">800</td></tr>
+      <tr class="hl"><td>one-shot WR（本文）</td><td class="good">94.67%</td><td class="num">0.2397</td><td class="num">1.64 s</td><td class="num">536</td></tr>
+    </tbody>
+  </table>
+  <div class="cols-3">
+    <div class="card"><h4>① 冗余即鲁棒</h4><p>带放回采样允许对关键桥接位置<b>重复增强</b>，故障后成功率 94.67%，<b>超过全量配置</b>（86.39%），比贪心类高约 72 pp。</p></div>
+    <div class="card"><h4>② 不放回会崩塌</h4><p>同为随机化的 WOR 仅 0.03%——「广覆盖、无冗余」无法保护最薄弱方向，反证冗余机制的决定性作用。</p></div>
+    <div class="card"><h4>③ 效率优势两个数量级</h4><p>1.64 s vs 贪心 325 s；仅用 536 个物理位置（53.6% 候选）达到最高成功率，兼得鲁棒性与可扩展性。</p></div>
+  </div>
+  <p class="small">注：one-shot WR 输出为重加权 Gramian，\(\lambda_{\min}(\hat W)\) 略高于 FULL 反映等效加权观测更强，评价重点应放在故障后成功率与耗时。</p>
+</section>
+
+<!-- ===== 11 参数敏感性：卡片式 ===== -->
+<section class="slide" id="sec-10">
+  <h2><span class="idx">11</span>参数敏感性：卡片式图文分析</h2>
+  <div class="rule"></div>
+  <p class="lead">同一社区结构系统上的纵向参数扫描（点击任意卡片，弹出完整内容：左侧结果图 + 右侧分析与结论）。</p>
+  <div class="exp-grid">
+    <div class="exp-card" data-tpl="tpl-exp1">
+      <div class="thumb"><img src="figures_v2/fig_4_1.png" alt="采样量 c 的影响"></div>
+      <div class="ec-body">
+        <div class="ec-title"><span class="dot"></span>采样量 c 的影响</div>
+        <div class="ec-sub">one-shot WR 呈非单调"阶梯"跃升；80% 成功率仅需 c≈700（Top-s / WOR 需 c=1000）</div>
+        <div class="ec-cta">查看图 + 完整分析</div>
+      </div>
+    </div>
+    <div class="exp-card" data-tpl="tpl-exp2">
+      <div class="thumb"><img src="figures_v2/fig_4_2.png" alt="同质存活概率 p 的影响"></div>
+      <div class="ec-body">
+        <div class="ec-title"><span class="dot"></span>同质存活概率 p 的影响</div>
+        <div class="ec-sub">p 从 0.9 降至 0.5：one-shot WR 仅"阈值右移"，Top-s / WOR 在 p≤0.6 时整体崩塌至 ≈1.5%</div>
+        <div class="ec-cta">查看图 + 完整分析</div>
+      </div>
+    </div>
+    <div class="exp-card" data-tpl="tpl-exp3">
+      <div class="thumb"><img src="figures_v2/fig_4_3.png" alt="异质存活概率 p 的影响"></div>
+      <div class="ec-body">
+        <div class="ec-title"><span class="dot"></span>异质存活概率 p 的影响</div>
+        <div class="ec-sub">\(p_i\sim U[\bar p\pm0.1]\)：one-shot WR 在中低可靠度优势反而放大（提升 7~22 pp）</div>
+        <div class="ec-cta">查看图 + 完整分析</div>
+      </div>
+    </div>
+    <div class="exp-card" data-tpl="tpl-exp4">
+      <div class="thumb"><img src="figures_v2/fig_4_4.png" alt="相对误差 ε 的影响"></div>
+      <div class="ec-body">
+        <div class="ec-title"><span class="dot"></span>相对误差 ε 的影响</div>
+        <div class="ec-sub">跃升点随 \(1/\varepsilon^2\) 同步迁移（500→600→1000），验证 \(c\propto1/\varepsilon^2\) 设计准则</div>
+        <div class="ec-cta">查看图 + 完整分析</div>
+      </div>
+    </div>
+    <div class="exp-card" data-tpl="tpl-exp5">
+      <div class="thumb"><img src="figures_v2/fig_4_5.png" alt="理论采样量曲面"></div>
+      <div class="ec-body">
+        <div class="ec-title"><span class="dot"></span>理论采样量曲面 c(ε,δ)</div>
+        <div class="ec-sub">AW / Chernoff / Minsker 三条理论界的三维曲面：对 ε 极敏感、对 δ 仅对数级；Chernoff ≈ AW 的 0.53~0.56 倍</div>
+        <div class="ec-cta">查看图 + 完整分析</div>
+      </div>
+    </div>
+    <div class="card" style="display:flex;flex-direction:column;justify-content:center;">
+      <h4>一致解释闭环</h4>
+      <p style="font-size:13px;">理论界说明 \(\varepsilon\) 收紧 / \(p\) 下降为何推高所需 \(c\)（经由 \(S=\sum\tau_i/p_i\) 与 \(\varepsilon^{-2}\)）；实验曲线的<b>跃升、右移与崩塌</b>形态均可在该框架下得到解释，形成「建模—算法—定理—实验」闭环。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ===== 12 创新点对比 ===== -->
+<section class="slide" id="sec-11">
+  <h2><span class="idx">12</span>创新点：与 Bopardikar (Automatica 2021) 的实质差异</h2>
+  <div class="rule"></div>
+  <p class="lead">针对「创新性是否足够、是否构成抄袭」的关切，逐项对照参考最多的 <a class="ref" href="https://www.sciencedirect.com/science/article/pii/S0005109820305409" target="_blank">Bopardikar, "A randomized approach to sensor placement with observability assurance," Automatica 123 (2021) 109340</a>：</p>
+  <table>
+    <thead>
+      <tr><th style="width:18%;">维度</th><th style="width:37%;">Bopardikar 2021（无故障设定）</th><th style="width:45%;">本文（故障感知设定）</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>故障模型</td><td>无（传感器不失效）</td><td><b>伯努利随机失效</b> \(\xi_i\sim\mathrm{Bern}(p_i)\)，含同质/异质分析</td></tr>
+      <tr><td>采样分布</td><td>\(q_i\propto\tau_i=\lambda_{\max}(W^{-1}W_i)\)</td><td>\(q_i\propto\tau_i/p_i\) —— 存活概率进入重要性分布</td></tr>
+      <tr><td>估计量 / 重加权</td><td>\(\Gamma_{ii}=\sqrt{n_i/(cp_i)}\)（仅校正采样）</td><td>\(Z_j=\xi_jW_{J_j}/(q_{J_j}p_{J_j})\)（同时校正采样 + 删失，双重随机无偏）</td></tr>
+      <tr><td>复杂度关键量</td><td>\(\sum_i\tau_i\)</td><td>\(S=\sum_i\tau_i/p_i\)（故障显式进入样本复杂度）</td></tr>
+      <tr><td>证明路径</td><td>仅 Ahlswede–Winter 一条</td><td><b>AW + 矩阵 Chernoff + Minsker 有效秩</b> 三路径统一（定理 2、3 为新分析）</td></tr>
+      <tr><td>维度依赖</td><td>\(\log n\)</td><td>Minsker 路径下 \(n\to r_{\mathrm{eff}}\) 有效秩</td></tr>
+      <tr><td>实验对象</td><td>可观测规范型随机系统</td><td>社区结构系统 + 故障场景成功率指标 + 6 算法横向/纵向对比</td></tr>
+    </tbody>
+  </table>
+  <div class="cols">
+    <div class="card">
+      <h4>创新性辩护（三点）</h4>
+      <ul class="tick">
+        <li>故障模型<b>改变了估计量本身</b>：无偏性要求 \(1/(q_ip_i)\) 双重重加权，非原框架的参数替换；</li>
+        <li>定理 2、3 是该问题上<b>此前不存在</b>的浓缩分析，且给出紧致性排序（Chernoff &lt; AW ≪ Minsker）；</li>
+        <li>「带放回冗余 vs 固定基数子集」的系统实验揭示了新的机理结论。</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>需坦诚说明</h4>
+      <ul class="tick">
+        <li>定理 1 的证明技术沿用 AW 框架，属<b>方法继承 + 对象扩展</b>，投稿时应明确引用并突出差异；</li>
+        <li>若投期刊，建议以定理 2、3 + 故障感知设计为主打，弱化「AW 路径」的增量感。</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ===== 13 期刊投稿建议 ===== -->
+<section class="slide" id="sec-12">
+  <h2><span class="idx">13</span>期刊投稿建议（供老师评估参考）</h2>
+  <div class="rule"></div>
+  <p class="lead">定位：理论为主（三条浓缩路径 + 样本复杂度）+ 完整实验闭环的工作；建议以「故障感知随机配置 + 高概率保证」为核心故事。<b>难度</b>以 ★（1~5）标注；<b>期刊类均为随时投稿制（无固定截止日期）</b>，会议类标注官方投稿截止日期。信息核实于 2026 年 9 月，投稿前请以官网为准。</p>
+  <table>
+    <thead>
+      <tr><th style="width:23%;">期刊 / 会议</th><th style="width:9%;">类型</th><th style="width:19%;">投稿截止 / 周期</th><th style="width:11%;">难度</th><th>匹配度分析</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><b>IEEE Control Systems Letters</b>（L-CSS）<br><a class="ref" href="https://ieeecss.org/publication/ieee-control-systems-letters/author-information" target="_blank">作者须知 ↗</a></td>
+        <td>期刊</td>
+        <td>随时投稿；审稿约 <b>3 个月</b><br><span class="small">联合 ACC 2027 提交：<b>2026-09-11</b></span></td>
+        <td><span class="stars">★★★★<span class="off">☆</span></span></td>
+        <td><span class="badge red">首推</span>短文格式契合「一个算法 + 三条定理」的紧凑贡献（严格 6 页）；随机化控制 + 概率保证是其常客主题。可走 L-CSS + ACC/CDC 联合提交通道。</td>
+      </tr>
+      <tr>
+        <td><b>Systems &amp; Control Letters</b><br><a class="ref" href="https://www.sciencedirect.com/journal/systems-and-control-letters" target="_blank">期刊主页 ↗</a></td>
+        <td>期刊</td>
+        <td>随时投稿<br><span class="small">审稿周期约 3~6 个月</span></td>
+        <td><span class="stars">★★★<span class="off">☆☆</span></span></td>
+        <td><span class="badge red">首推</span>简洁理论论文传统深厚，矩阵浓缩类工具接受度高；篇幅 8~10 页正好承载三定理框架而不被要求补充大量应用实验。</td>
+      </tr>
+      <tr>
+        <td><b>Automatica</b>（Brief Paper）<br><a class="ref" href="https://www.sciencedirect.com/journal/automatica" target="_blank">期刊主页 ↗</a></td>
+        <td>期刊</td>
+        <td>随时投稿<br><span class="small">审稿周期约 4~8 个月</span></td>
+        <td><span class="stars">★★★★★</span></td>
+        <td><span class="badge gold">进阶</span>与 <a class="ref" href="https://www.sciencedirect.com/science/article/pii/S0005109820305409" target="_blank">Bopardikar (Automatica 2021)</a> 同源、谱系清晰；但对增量式创新把关严格——需先补强（多次异质实例统计、相关故障初步结果、紧界讨论）再冲。</td>
+      </tr>
+      <tr>
+        <td><b>IEEE Trans. Control of Network Systems</b><br><a class="ref" href="https://ieeecss.org/publication/tcns" target="_blank">期刊主页 ↗</a></td>
+        <td>期刊</td>
+        <td>随时投稿<br><span class="small">审稿周期约 6~12 个月</span></td>
+        <td><span class="stars">★★★★<span class="off">☆</span></span></td>
+        <td><span class="badge gold">进阶</span>社区结构实验与网络可观性主题契合；适合把「网络弱方向保护 + 容错配置」做成主叙事的扩展版本。</td>
+      </tr>
+      <tr>
+        <td><b>IEEE Sensors J. / IEEE TIM</b><br><a class="ref" href="https://ieee-sensors.org/sensors-journal/" target="_blank">期刊主页 ↗</a></td>
+        <td>期刊</td>
+        <td>随时投稿<br><span class="small">审稿周期约 2~4 个月</span></td>
+        <td><span class="stars">★★<span class="off">☆☆☆</span></span></td>
+        <td><span class="badge blue">备选</span>偏应用；理论需淡化、工程场景（结构健康监测、交通网络）需补实例。作为保底选项。</td>
+      </tr>
+      <tr>
+        <td><b>ACC 2027</b>（美国控制会议）<br><a class="ref" href="https://acc2027.a2c2.org/" target="_blank">会议官网 ↗</a></td>
+        <td>会议</td>
+        <td><b>2026-09-25</b> 投稿截止<br><span class="small">会议 2027-07-07~09，费城</span></td>
+        <td><span class="stars">★★★<span class="off">☆☆</span></span></td>
+        <td><span class="badge blue">会议选项</span>随机化 + 概率保证主题接受度高，可与 L-CSS 联合提交（09-11）；适合先拿会议版本再扩刊。</td>
+      </tr>
+      <tr>
+        <td><b>CDC 2027</b>（决策与控制会议）<br><a class="ref" href="https://ieeecss.org/conferences" target="_blank">IEEE-CSS 会议页 ↗</a></td>
+        <td>会议</td>
+        <td>预计 <b>2027 年 3 月</b> 截止<br><span class="small">会议 2027-12，里斯本（待官宣）</span></td>
+        <td><span class="stars">★★★★<span class="off">☆</span></span></td>
+        <td><span class="badge blue">会议选项</span>控制理论旗舰会议，理论味更浓，契合三定理框架；可走 L-CSS + CDC 联合通道。</td>
+      </tr>
+    </tbody>
+  </table>
+  <div class="keypoint"><b>投稿前建议补强的三件事：</b>① 异质 \(p_i\) 场景改为多次随机实例并报告均值±方差（目前是单次固定种子，论文中已自我指出）；② 增加相关故障 / 簇状故障的初步讨论或反例，回应「独立伯努利」这一最主要局限；③ 明确 one-shot WR 带权输出 → 固定基数安装方案的转换流程（如以采样次数为优先级做整数规划后处理）。</div>
+</section>
+
+<!-- ===== 14 总结 ===== -->
+<section class="slide" id="sec-13">
+  <h2><span class="idx">14</span>总结、局限与下一步</h2>
+  <div class="rule"></div>
+  <div class="cols">
+    <div>
+      <h3 class="sec">工作总结（建模—算法—理论—实验闭环）</h3>
+      <ul class="tick">
+        <li><b>建模：</b>将静态配置 + 伯努利失效统一为「随机配置—随机故障—随机矩阵和」框架，以 E-最优刻画最弱方向；</li>
+        <li><b>算法：</b>one-shot WR，采样分布 \(q_i\propto\tau_i/p_i\) + 双重无偏重加权；</li>
+        <li><b>理论：</b>引理 1（无偏 + 一致控制）→ 定理 1/2/3 三路径高概率谱夹紧与样本复杂度界；</li>
+        <li><b>实验：</b>94.67% 故障后成功率（超全量基线）、耗时 1.64 s（较贪心快 2~3 个数量级）、\(c\propto1/\varepsilon^2\) 理论印证。</li>
+      </ul>
+    </div>
+    <div>
+      <h3 class="sec">局限（论文中已如实讨论）</h3>
+      <ul class="tick">
+        <li>独立伯努利假设，未覆盖相关 / 簇状 / 攻击型失效；</li>
+        <li>LTI + 有限时域 Gramian，非线性系统仅有类比路径；</li>
+        <li>输出为带权设计，非严格固定基数物理子集；</li>
+        <li>Minsker 路径保守（方差代理构造待改进）。</li>
+      </ul>
+      <h3 class="sec">下一步研究方向</h3>
+      <ul class="tick">
+        <li>相关故障与安全（攻击）场景的鲁棒配置；</li>
+        <li>非线性 / 切换系统的经验 Gramian 框架推广；</li>
+        <li>分布式 / 在线自适应随机配置；</li>
+        <li>「配置—估计—控制」一体化联合设计。</li>
+      </ul>
+    </div>
+  </div>
+  <div style="margin-top:28px;text-align:center;padding:22px;border-top:1px solid var(--line);">
+    <div style="font-family:'Noto Serif SC',serif;font-size:22px;color:var(--ink);font-weight:700;">请老师批评指正 · 谢谢！</div>
+    <div class="small" style="margin-top:8px;">唐星泽 ｜ 主要参考：<a class="ref" href="https://www.sciencedirect.com/science/article/pii/S0005109820305409" target="_blank">Bopardikar, Automatica 123 (2021) 109340</a>；<a class="ref" href="https://ieeexplore.ieee.org/document/985947" target="_blank">Ahlswede &amp; Winter, IEEE TIT 48(3), 2002</a>；<a class="ref" href="https://arxiv.org/abs/1004.4389" target="_blank">Tropp, FoCM 12(4), 2012</a>；<a class="ref" href="https://arxiv.org/abs/1501.01571" target="_blank">Tropp, FnTML 8(1–2), 2015</a>；<a class="ref" href="https://www.sciencedirect.com/science/article/pii/S0167715217301207" target="_blank">Minsker, SPL 127, 2017</a></div>
+  </div>
+</section>
+
+<!--PART5-->
+</div>
+</main>
+
+<!-- 回到顶部 -->
+<button class="backtop" id="backtop" title="回到顶部">↑</button>
+
+<!-- ================= 弹窗容器 ================= -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <div class="modal-head">
+      <span class="m-tag" id="mTag">详情</span>
+      <div class="m-title" id="mTitle"></div>
+      <button class="modal-close" id="modalClose" title="关闭">×</button>
+    </div>
+    <div class="modal-body" id="modalBody"></div>
+    <div class="m-btnrow"><button class="m-btn" id="modalOk">关 闭</button></div>
+  </div>
+</div>
+
+<!-- ================= 详情模板：引理 1 ================= -->
+<div class="tpl" id="tpl-l1s1" data-tag="引理 1 · 步骤 1" data-title="无偏性 E[Ŵ]=W（全期望公式）">
+  <h3>目标</h3>
+  <p>证明故障删失后的重加权估计量 \(\hat W=\frac1c\sum_{k=1}^{c}\frac{\xi_k}{q_{J_k}p_{J_k}}W_{J_k}\) 是全量 Gramian \(W=\sum_{i=1}^{m}W_i\) 的无偏估计，即 \(E[\hat W]=W\)。</p>
+  <h3>推导</h3>
+  <p><b>独立同分布结构：</b>\(c\) 次抽样之间相互独立，且各次故障指示之间相互独立——抽到的位置 \(J_k\) 在次数之间是独立的，给定位置后的故障指示 \(\xi_k\) 在次数之间也是独立的。既然 \((J_k,\xi_k)\) 在 \(c\) 次之间是独立同分布（i.i.d.）的，那么作为它们函数的样本 \(\tfrac{\xi_k}{q_{J_k}p_{J_k}}W_{J_k}\) 自然也是独立同分布的。先化为单样本期望的 \(c\) 倍：</p>
+  \[ E[\hat W]=\sum_{k=1}^{c}E\Big[\frac{\xi_k}{c\,q_{J_k}p_{J_k}}W_{J_k}\Big]=c\,E\Big[\frac{\xi_1}{c\,q_{J_1}p_{J_1}}W_{J_1}\Big]. \]
+  <p><b>① 条件期望（固定 \(J_1=i\)）：</b>此处不需要 \(J_1\) 与 \(\xi_1\) 全局独立，只需条件期望性质 \(E[\xi_1\mid J_1=i]=p_i\)——它由故障模型的定义天然保证：\(p_i\) 本身就是「抽到位置 \(i\) 后传感器存活」的条件概率。存活概率恰好被分母中的 \(p_i\) 抵消：</p>
+  \[ E\Big[\frac{\xi_1}{c\,q_{J_1}p_{J_1}}W_{J_1}\Big|J_1=i\Big]=\frac{E[\xi_1\mid J_1=i]}{c\,q_ip_i}W_i=\frac{p_i}{c\,q_ip_i}W_i=\frac{1}{c\,q_i}W_i. \]
+  <p><b>② 对 \(J_1\) 取全期望：</b>再按抽样分布 \(q_i\) 加权求和，\(q_i\) 同样被抵消：</p>
+  \[ E\Big[\frac{\xi_1}{c\,q_{J_1}p_{J_1}}W_{J_1}\Big]=\sum_{i=1}^{m}q_i\cdot\frac{1}{c\,q_i}W_i=\frac1c\sum_{i=1}^{m}W_i=\frac1cW. \]
+  <p>代回即得 \(E[\hat W]=c\cdot\frac1cW=W\)。∎</p>
+  <h3>注意：\(J_1\) 与 \(\xi_1\) 并不（全局）独立</h3>
+  <p>当不同位置的存活率不同（\(p_i\) 随 \(i\) 变化）时，\(J_1\) 与 \(\xi_1\) 在全局概率上<b>不独立</b>。反例：设 \(m=2\)、\(q_1=q_2=0.5\)、\(p_1=0.9\)、\(p_2=0.1\)，则 \(P(\xi_1=1)=0.5\times0.9+0.5\times0.1=0.5\)，但 \(P(\xi_1=1\mid J_1=1)=0.9\neq0.5\)。推导真正用到的只是<b>条件期望</b> \(E[\xi_1\mid J_1=i]=p_i\)（「给定抽到 \(i\) 后存活率为 \(p_i\)」是模型定义），而非二者独立——若误以为独立，反而无法解释为何要按位置加权。事实上，正是因为 \(J\) 与 \(\xi\) 不独立（各 \(p_i\) 不同），才需要 \(1/p_i\) 这一项做「双重加权」校正；若二者真独立（所有 \(p_i\) 相等），\(1/p_i\) 退化为可提出求和号的常数，校正便失去意义。</p>
+  <h3>为什么必须双重重加权</h3>
+  <p>分母 \(q_ip_i\) 同时校正两重随机性：\(1/q_i\) 校正「按分布 \(q\) 抽样」的选择偏差，\(1/p_i\) 校正「存活删失」造成的缺失。去掉任何一项，期望都无法回到 \(W\)——这是故障感知设计区别于 Bopardikar (2021) 无故障版本的关键构造。</p>
+</div>
+
+<div class="tpl" id="tpl-l1s2" data-tag="引理 1 · 步骤 2" data-title="一致上界 0⪯Yk⪯(S/c)I 与 E[ΣYk]=I">
+  <h3>目标</h3>
+  <p>对白化归一化项 \(Y_k=W^{-\frac12}\big(\frac{\xi_k}{c\,q_{J_k}p_{J_k}}W_{J_k}\big)W^{-\frac12}\)，证明 \(0\preceq Y_k\preceq\frac ScI\) 且 \(E\big[\sum_{k=1}^{c}Y_k\big]=I\)。这两个量是后续三条矩阵浓缩不等式（AW / Chernoff / Minsker）共用的输入形式。</p>
+  <h3>推导：上界</h3>
+  <p><b>① 相似矩阵同谱：</b>对任意对称矩阵 \(M\) 有 \(M\preceq\lambda_{\max}(M)I\)。取 \(M=W^{-\frac12}W_iW^{-\frac12}\)，并注意它与 \(W^{-1}W_i\) 相似（特征值相同），故</p>
+  \[ W^{-\tfrac12}W_iW^{-\tfrac12}\preceq\lambda_{\max}\big(W^{-\tfrac12}W_iW^{-\tfrac12}\big)I=\tau_iI,\qquad \tau_i=\lambda_{\max}(W^{-1}W_i). \]
+  <p><b>② 关键代换：</b>由故障感知分布 \(q_i=\tau_i/(p_iS)\) 得 \(\tau_i/(q_ip_i)=S\) 对所有 \(i\) 成立——所有活跃样本的相对上界被<b>完全均衡</b>。于是</p>
+  \[ Y_k\preceq\frac{\xi_k}{c\,q_{J_k}p_{J_k}}\cdot\tau_{J_k}I=\frac{\xi_k}{c}\cdot\frac{\tau_{J_k}}{q_{J_k}p_{J_k}}I\preceq\frac{S}{c}I, \]
+  <p>其中用 \(0\preceq W_i\)（Gramian 半正定）得左端不等式 \(0\preceq Y_k\)，用 \(\xi_k\le1\) 得右端。</p>
+  <h3>推导：期望</h3>
+  <p>由线性性与步骤 1 的无偏性：</p>
+  \[ E\Big[\sum_{k=1}^{c}Y_k\Big]=c\,E[Y_1]=W^{-\tfrac12}\,E[\hat W]\,W^{-\tfrac12}=W^{-\tfrac12}WW^{-\tfrac12}=I.\ \blacksquare \]
+  <h3>在三条定理中的角色</h3>
+  <p>「期望为 \(I\) + 一致界 \(S/c\)」正是 AW 不等式需要的 \((U,\rho)\) 组合、矩阵 Chernoff 需要的 \((L,\mu_{\min},\mu_{\max})\) 组合。故障概率通过 \(S=\sum\tau_i/p_i\) 显式进入复杂度，而非乘一个平均存活率。</p>
+</div>
+
+<!-- ================= 详情模板：定理 1 ================= -->
+<div class="tpl" id="tpl-t1s1" data-tag="定理 1 · 步骤 1" data-title="构造与期望：验证 E[Zj]=W">
+  <h3>单样本构造</h3>
+  <p>第 \(j\) 次抽样的随机矩阵样本为</p>
+  \[ Z_j=Z_{ji}=\frac{\xi_j}{q_{J_j}p_{J_j}}W_{J_j}\succeq0, \]
+  <p>其中 \(J_j\sim q\)（按分布 \(q\) 抽位置）、给定 \(J_j=i\) 时 \(\xi_j\sim\mathrm{Bern}(p_i)\)（存活指示）。注意 \(\xi_j\) 的分布参数由 \(J_j\) 决定，二者在全局上<b>并不独立</b>（存活率 \(p_i\) 随位置不同而不同）——后续期望计算只依赖条件期望 \(E[\xi_j\mid J_j=i]=p_i\)，无需全局独立性。而 \(c\) 次抽样之间相互独立、各次故障指示之间相互独立，\((J_j,\xi_j)\) 在次数之间独立同分布，故作为其函数的 \(Z_j\) 也是独立同分布的；\(W_i\succeq0\) 保证 \(Z_j\succeq0\)（半正定是 AW 不等式的准入条件）。</p>
+  <h3>期望：对「存活 / 失效」两种情形展开</h3>
+  <p>条件于 \(J_j=i\)：以概率 \(p_i\) 存活，取值 \(\frac{1}{q_ip_i}W_i\)；以概率 \(1-p_i\) 失效，取值 \(0\)。于是</p>
+  \[ E[Z_j]=\sum_{i=1}^{m}q_i\Big(p_i\cdot\frac{1}{q_ip_i}W_i+(1-p_i)\cdot0\Big)=\sum_{i=1}^{m}q_i\cdot\frac{1}{q_i}W_i=\sum_{i=1}^{m}W_i=W. \]
+  <h3>说明</h3>
+  <p>这一步与引理 1 的无偏性同源，但此处强调：失效情形贡献 \(0\)（PSD，不破坏非负性），且 \(q_i\) 在求和中逐项消去——分布 \(q\) 的具体形式不影响无偏性，只影响后面步骤 2 中的上界常数 \(S\)。这正是「无偏性对任意 \(q\) 成立、复杂度由 \(q\) 的设计决定」的分层结构。</p>
+</div>
+
+<div class="tpl" id="tpl-t1s2" data-tag="定理 1 · 步骤 2" data-title="统一相对上界 ρ=S 及 ρ≥1 的验证">
+  <h3>① 先证 Wi⪯τiW（相似矩阵同谱）</h3>
+  <p>基线可观 \(\Rightarrow W\succ0\)，故 \(W^{-\frac12}\) 存在。对任意对称 \(M\)：\(M\preceq\lambda_{\max}(M)I\)，取 \(M=W^{-\frac12}W_iW^{-\frac12}\)：</p>
+  \[ W^{-\tfrac12}W_iW^{-\tfrac12}\preceq\lambda_{\max}\big(W^{-\tfrac12}W_iW^{-\tfrac12}\big)I. \]
+  <p>两边做 congruence（左右同乘 \(W^{\frac12}\)，保持 Loewner 序）：</p>
+  \[ W_i\preceq\lambda_{\max}\big(W^{-\tfrac12}W_iW^{-\tfrac12}\big)W. \]
+  <p>由于 \(W^{-\frac12}W_iW^{-\frac12}\) 与 \(W^{-1}W_i\) 相似（特征值相同），故 \(W_i\preceq\tau_iW\)，其中 \(\tau_i=\lambda_{\max}(W^{-1}W_i)\)。</p>
+  <h3>② 确定 ρ：存活 / 失效两种情形</h3>
+  <p>由 \(q_ip_i=\tau_i/S\)（即 \(S=\sum_i\tau_i/p_i\)）：当第 \(j\) 次采样选中 \(i\) 且<b>存活</b>时，</p>
+  \[ Z_{ji}=\frac{1}{q_ip_i}W_i=\frac{S}{\tau_i}W_i\preceq\frac{S}{\tau_i}\cdot\tau_iW=SW; \]
+  <p>当<b>失效</b>时，\(Z_{ji}=0\preceq SW\)。故几乎必然有 \(Z_j\preceq SW\)，即统一相对上界常数 \(\rho=S\)。</p>
+  <h3>③ 验证 ρ=S≥1</h3>
+  <p>对 \(W_i\preceq\tau_iW\) 关于 \(i\) 求和：\(W=\sum W_i\preceq(\sum\tau_i)W\)，比较两端得 \(\sum\tau_i\ge1\)。又 \(0\lt p_i\le1\Rightarrow 1/p_i\ge1\)，故</p>
+  \[ S=\sum_{i=1}^{m}\frac{\tau_i}{p_i}\ \ge\ \sum_{i=1}^{m}\tau_i\ \ge\ 1. \]
+  <p>因此 \(\rho=S\ge1\) 满足 AW 不等式对相对上界的要求。\(\blacksquare\)</p>
+  <h3>设计洞察</h3>
+  <p>上式中等号 \(\tau_i/(q_ip_i)=S\) 对<b>所有</b> \(i\) 成立意味着：故障感知分布 \(q_i\propto\tau_i/p_i\) 把每个位置的「最坏方向贡献 ÷ 存活概率」完全均衡化——重要性越高、越不可靠的位置被抽得越频繁，使所有活跃样本的相对扰动一致，\(S\) 因此成为唯一进入复杂度的「系统相关常数」。</p>
+</div>
+
+<div class="tpl" id="tpl-t1s3" data-tag="定理 1 · 步骤 3" data-title="代入 AW 不等式并反解采样量 c">
+  <h3>代入</h3>
+  <p>样本 \(Z_j\) 对称半正定、\(E[Z_j]=W\)、几乎必然 \(Z_j\preceq\rho W\)（\(\rho=S\ge1\)）。代入 Ahlswede–Winter 不等式（见上方「支撑原定理」），对 \(\varepsilon\in(0,1)\)：</p>
+  \[ \Pr\Big((1-\varepsilon)W\preceq\frac1c\sum_{j=1}^{c}Z_j\preceq(1+\varepsilon)W\Big)\ \ge\ 1-2n\,e^{-\varepsilon^2c/4\rho}=1-2n\,e^{-\varepsilon^2c/4S}. \]
+  <h3>反解 c</h3>
+  <p>令右端 \(\ge1-\delta\)，只需 \(2n\,e^{-\varepsilon^2c/4S}\le\delta\)。两边取对数：</p>
+  \[ \frac{\varepsilon^2c}{4S}\ \ge\ \ln\frac{2n}{\delta}\qquad\Longleftrightarrow\qquad c\ \ge\ \frac{4S}{\varepsilon^2}\ln\frac{2n}{\delta}=\frac{4}{\varepsilon^2}\Big(\sum_{i=1}^{m}\frac{\lambda_{\max}(W^{-1}W_i)}{p_i}\Big)\ln\frac{2n}{\delta}. \]
+  <p>在此条件下 \(\hat W=\frac1c\sum_jZ_j\) 以至少 \(1-\delta\) 的概率被夹在 \((1-\varepsilon)W\) 与 \((1+\varepsilon)W\) 之间，进而 \(\lambda_{\min}(\hat W)\ge(1-\varepsilon)\lambda_{\min}(W)\)。\(\blacksquare\)</p>
+  <h3>结论解读</h3>
+  <p>复杂度对 \(\varepsilon\) 呈 \(\varepsilon^{-2}\)、对维度呈 \(\log n\)、对置信呈 \(\log(1/\delta)\) 依赖；对故障的依赖完全体现在 \(S=\sum\tau_i/p_i\)——若某关键位置 \(p_i\) 下降，采样需求按 \(1/p_i\) 放大，而非乘平均存活率。这也解释了实验中 one-shot WR 通过对 \(\tau_i/p_i\) 大的位置重复采样来保护跨社区弱方向。</p>
+</div>
+
+<!-- ================= 详情模板：定理 2 ================= -->
+<div class="tpl" id="tpl-t2s1" data-tag="定理 2 · 步骤 1" data-title="白化与独立性">
+  <h3>白化构造</h3>
+  <p>将每个随机矩阵样本白化为</p>
+  \[ X_j=\frac1c\,W^{-\tfrac12}Z_jW^{-\tfrac12},\qquad j=1,\dots,c. \]
+  <p>基线可观 \(\Rightarrow W\succ0\Rightarrow W^{-\frac12}\) 存在；<span class="term">congruence 变换<span class="term-tip"><b>Congruence（相合）变换</b>：\(A\mapsto P^{T}\!AP\)（\(P\) 可逆），保持二次型与惯性指数（正定 / 半正定性不变）。<b>关键性质</b>：若 \(A\preceq B\)，则 \(P^{T}\!AP\preceq P^{T}\!BP\)——因为 \(x^{T}P^{T}(B\!-\!A)Px=(Px)^{T}(B\!-\!A)(Px)\ge0\)，而 \(Px\) 可取到任意非零向量。<span class="warn">⚠ 相似变换 \(P^{-1}\!AP\) 只保特征值（谱）——相似变换不保半正定序！congruence 变换严格保半正定序！</span>本文中 \(W\succ0\) 保证 \(W^{\frac12}\) 可逆，白化 \(A\mapsto W^{-\frac12}AW^{-\frac12}\) 及其还原均为 congruence，故 PSD 夹逼无损映射。</span></span>保持 <span class="term">Loewner 序<span class="term-tip"><b>Loewner 序（半正定序）</b>：对称矩阵 \(A\preceq B\iff B-A\succeq0\)（半正定，即所有特征值 \(\ge0\)）。<b>物理意义</b>：\(B\) 包含的信息（能量）不少于 \(A\)——传感器配置中即观测信息量。<b>保序性</b>：可逆 congruence 变换 \(A\mapsto P^{T}\!AP\) 严格保持 Loewner 序；相似变换则不保此序。</span></span>，因此后续在 \(X_j\) 上建立的 PSD 夹逼可无损映射回 \(\hat W\)。</p>
+  <h3>独立性</h3>
+  <p>\(Z_j\) 之间独立（\(c\) 次抽样独立 + 故障指示 \(\xi_j\) 独立），连续映射不破坏独立性，故 \(X_j\) 相互独立——这是矩阵 Chernoff 不等式对「独立 PSD 矩阵序列」的基本要求。</p>
+  <h3>为什么选白化</h3>
+  <p>白化把目标从「\(\hat W\) 相对 \(W\) 的乘性近似」转化为「\(Y=\sum_jX_j\) 相对 \(I\) 的谱偏离」：\(\lambda_{\min}(Y)\ge1-\varepsilon\Leftrightarrow\hat W\succeq(1-\varepsilon)W\)，\(\lambda_{\max}(Y)\le1+\varepsilon\Leftrightarrow\hat W\preceq(1+\varepsilon)W\)。这样矩阵 Chernoff 的结论（关于极特征值偏离期望矩阵的界）可直接套用，期望矩阵恰为单位阵，参数最简。</p>
+</div>
+
+<div class="tpl" id="tpl-t2s2" data-tag="定理 2 · 步骤 2" data-title="验证 Chernoff 条件：L=S/c 与 μmin=μmax=1">
+  <h3>条件一：统一上界 L</h3>
+  <p>与定理 1 步骤 2 同源：由 \(q_ip_i=\tau_i/S\) 与 \(W_i\preceq\tau_iW\)，存活时 \(Z_{ji}=\frac{S}{\tau_i}W_i\preceq SW\)，失效时 \(Z_{ji}=0\)。白化并除以 \(c\)：</p>
+  \[ 0\ \preceq\ X_j=\frac1cW^{-\tfrac12}Z_jW^{-\tfrac12}\ \preceq\ \frac{S}{c}I\quad\big(\Rightarrow L=\tfrac{S}{c}\big). \]
+  <h3>条件二：期望与极特征值</h3>
+  <p>由 \(E[Z_j]=W\)（定理 1 步骤 1）：</p>
+  \[ E\Big[\sum_{j=1}^{c}X_j\Big]=\frac1c\sum_{j=1}^{c}W^{-\tfrac12}E[Z_j]W^{-\tfrac12}=W^{-\tfrac12}WW^{-\tfrac12}=I. \]
+  <p>因此和矩阵 \(Y=\sum_jX_j\) 满足</p>
+  \[ \mu_{\min}=\lambda_{\min}(E[Y])=1,\qquad \mu_{\max}=\lambda_{\max}(E[Y])=1. \]
+  <h3>参数对照</h3>
+  <p>矩阵 Chernoff（Tropp 统一表述）要求的三元组在本问题中为 \(X_k\to X_j\)、\(L\to S/c\)、\((\mu_{\min},\mu_{\max})\to(1,1)\)——全部由引理 1 直接供给，体现了「引理 1 是三条路径公共基石」的结构。</p>
+</div>
+
+<div class="tpl" id="tpl-t2s3" data-tag="定理 2 · 步骤 3" data-title="双侧尾界 + 联合界回到 Ŵ">
+  <h3>套用矩阵 Chernoff 双侧尾界</h3>
+  <p>将 \(L=S/c\)、\(\mu_{\min}=\mu_{\max}=1\) 代入 Tropp 的矩阵 Chernoff 不等式（见上方「支撑原定理」），对 \(\varepsilon\in[0,1)\)（下尾）与 \(\varepsilon\ge0\)（上尾）：</p>
+  \[ \Pr\big(\lambda_{\min}(Y)\le1-\varepsilon\big)\le n\Big[\tfrac{e^{-\varepsilon}}{(1-\varepsilon)^{1-\varepsilon}}\Big]^{c/S},\qquad
+     \Pr\big(\lambda_{\max}(Y)\ge1+\varepsilon\big)\le n\Big[\tfrac{e^{\varepsilon}}{(1+\varepsilon)^{1+\varepsilon}}\Big]^{c/S}. \]
+  <h3>等价事件转回 Ŵ</h3>
+  <p>由白化关系 \(Y=\sum_jX_j=W^{-\frac12}\hat WW^{-\frac12}\)：事件 \(\{\lambda_{\min}(Y)\ge1-\varepsilon\}\) 等价于 \(\hat W\succeq(1-\varepsilon)W\)；\(\{\lambda_{\max}(Y)\le1+\varepsilon\}\) 等价于 \(\hat W\preceq(1+\varepsilon)W\)。</p>
+  <h3>联合界</h3>
+  \[ \Pr\big((1-\varepsilon)W\preceq\hat W\preceq(1+\varepsilon)W\big)\ \ge\ 1-\Pr\big(\lambda_{\min}(Y)\le1-\varepsilon\big)-\Pr\big(\lambda_{\max}(Y)\ge1+\varepsilon\big). \]
+  <p>令两尾各不超过 \(\delta/2\) 即可保证总失败概率 \(\le\delta\)（下一步取对数反解）。</p>
+</div>
+
+<div class="tpl" id="tpl-t2s4" data-tag="定理 2 · 步骤 4" data-title="取对数反解 c（max 形式的来源）">
+  <h3>两尾各自反解</h3>
+  <p>令下尾 \(n\big[\tfrac{e^{-\varepsilon}}{(1-\varepsilon)^{1-\varepsilon}}\big]^{c/S}\le\delta/2\)。因 \(\varepsilon\in(0,1)\) 时底数 \(\tfrac{e^{-\varepsilon}}{(1-\varepsilon)^{1-\varepsilon}}\lt1\)，取对数（注意反号）：</p>
+  \[ \ln n+\frac{c}{S}\ln\tfrac{e^{-\varepsilon}}{(1-\varepsilon)^{1-\varepsilon}}\le\ln\frac\delta2
+     \qquad\Longleftrightarrow\qquad c\ \ge\ S\cdot\frac{\ln(2n/\delta)}{-\ln\big[\tfrac{e^{-\varepsilon}}{(1-\varepsilon)^{1-\varepsilon}}\big]}. \]
+  <p>同理，上尾 \(n\big[\tfrac{e^{\varepsilon}}{(1+\varepsilon)^{1+\varepsilon}}\big]^{c/S}\le\delta/2\) 给出</p>
+  \[ c\ \ge\ S\cdot\frac{\ln(2n/\delta)}{-\ln\big[\tfrac{e^{\varepsilon}}{(1+\varepsilon)^{1+\varepsilon}}\big]}. \]
+  <h3>取 max 并联立</h3>
+  \[ c\ \ge\ S\cdot\max\Bigg\{\frac{\ln(2n/\delta)}{-\ln\big[\tfrac{e^{-\varepsilon}}{(1-\varepsilon)^{1-\varepsilon}}\big]},\ \frac{\ln(2n/\delta)}{-\ln\big[\tfrac{e^{\varepsilon}}{(1+\varepsilon)^{1+\varepsilon}}\big]}\Bigg\}. \]
+  <p>此时两尾各 \(\le\delta/2\)，联合界给出 \(\Pr((1-\varepsilon)W\preceq\hat W\preceq(1+\varepsilon)W)\ge1-\delta\)，进而 \(\lambda_{\min}(\hat W)\ge(1-\varepsilon)\lambda_{\min}(W)\) 以概率 \(\ge1-\delta\) 成立。\(\blacksquare\)</p>
+  <h3>与 AW 路径的关系</h3>
+  <p>两者量级同为 \(O\big(S\varepsilon^{-2}\log(n/\delta)\big)\)，但 Chernoff 指数 \(-\ln\tfrac{e^{-\varepsilon}}{(1-\varepsilon)^{1-\varepsilon}}\) 在小 \(\varepsilon\) 处展开为 \(\varepsilon^2/2+O(\varepsilon^3)\)，优于 AW 的 \(\varepsilon^2/4\)——数值上约为 AW 界的 0.53~0.56 倍（见第 11 节理论曲面图），故作为工程部署的首选参考界。</p>
+</div>
+
+<!-- ================= 详情模板：定理 3 ================= -->
+<div class="tpl" id="tpl-t3s1" data-tag="定理 3 · 步骤 1" data-title="中心化构造 Ỹj=Zj−W">
+  <h3>构造</h3>
+  <p>令中心化偏差矩阵</p>
+  \[ \tilde Y_j:=Z_j-W,\qquad j=1,\dots,c. \]
+  <p>由 \(E[Z_j]=W\)（定理 1 步骤 1）得 \(E[\tilde Y_j]=0\)；\(Z_j\) 独立同分布 \(\Rightarrow\tilde Y_j\) 独立同分布、零均值——满足 Minsker 不等式对「独立零均值自伴矩阵」的准入条件（\(\tilde Y_j\) 自伴因 \(Z_j\)、\(W\) 均对称）。</p>
+  <h3>和矩阵与目标事件的等价改写</h3>
+  \[ \mathcal S_c:=\sum_{j=1}^{c}\tilde Y_j=\sum_{j=1}^{c}Z_j-cW=c(\hat W-W). \]
+  <p>于是</p>
+  \[ \|\hat W-W\|_2\gt t\qquad\Longleftrightarrow\qquad\|\mathcal S_c\|_2\gt ct. \]
+  <h3>与前两条路径的本质区别</h3>
+  <p>AW / Chernoff 直接控制「白化和相对单位阵的 PSD 偏序」；Minsker 控制「中心化和的算子范数」\(\|\mathcal S_c\|_2\)——是<b>绝对量</b>而非相对量，因此需要显式的尺度参数 \(t=\varepsilon\lambda_{\min}(W)\)（步骤 5 中转回乘性夹逼）与方差代理（步骤 3）。</p>
+</div>
+
+<div class="tpl" id="tpl-t3s2" data-tag="定理 3 · 步骤 2" data-title="统一范数上界 U0">
+  <h3>两种情形的分类讨论</h3>
+  <p>若第 \(j\) 次采样抽中位置 \(i\) 且<b>存活</b>：\(Z_j=\frac{1}{q_ip_i}W_i\)，故 \(\tilde Y_j=\frac{1}{q_ip_i}W_i-W\)；若<b>失效</b>：\(Z_j=0\)，故 \(\tilde Y_j=-W\)。因此几乎必然有</p>
+  \[ \|\tilde Y_j\|_2\ \le\ \max\Bigg\{\max_{1\le i\le m}\Big\|\frac{W_i}{q_ip_i}-W\Big\|_2,\ \|W\|_2\Bigg\}=:U_0. \]
+  <p>即 Minsker 不等式中的范数参数 \(U\to U_0\)。</p>
+  <h3>上界为何可能很大（保守性来源）</h3>
+  <p>若某位置的 \(q_ip_i=\tau_i/S\) 很小（低存活 + 低重要性得分），则 \(\frac{W_i}{q_ip_i}\) 的范数被 \(1/(q_ip_i)\) 放大，\(U_0\) 随之增大。这是 Minsker 界在重加权设计中显著保守（实验中比 Chernoff 高 7+ 个数量级）的直接原因。</p>
+</div>
+
+<div class="tpl" id="tpl-t3s3" data-tag="定理 3 · 步骤 3" data-title="方差代理 σ²=cσ0² 与有效秩 r_eff(Σ)">
+  <h3>方差代理</h3>
+  <p>记单样本中心化二阶矩矩阵 \(\Sigma:=E[\tilde Y_1^2]\)（PSD），\(\sigma_0^2:=\|\Sigma\|_2\)。由独立性：</p>
+  \[ \Big\|\sum_{j=1}^{c}E[\tilde Y_j^2]\Big\|_2=\|c\Sigma\|_2=c\sigma_0^2\qquad\big(\Rightarrow\ \sigma^2:=c\sigma_0^2\big). \]
+  <h3>有效秩与 c 无关</h3>
+  \[ r\Big(\sum_{j=1}^{c}E[\tilde Y_j^2]\Big)=\frac{\mathrm{tr}(c\Sigma)}{\|c\Sigma\|_2}=\frac{c\,\mathrm{tr}(\Sigma)}{c\,\|\Sigma\|_2}=\frac{\mathrm{tr}(\Sigma)}{\|\Sigma\|_2}=r_{\mathrm{eff}}(\Sigma). \]
+  <p>即无论采样多少次，二阶矩矩阵的有效秩不变——维度惩罚在求和前后保持一致，这是「有效秩替代名义维数 \(n\)」得以成立的结构性质。</p>
+  <h3>直观含义</h3>
+  <p>\(\Sigma\) 刻画中心化扰动的能量在各方向的分布：若其谱集中在少数方向（\(r_{\mathrm{eff}}\ll n\)），Minsker 界的维度项显著小于 \(n\)，利于高维低秩系统；若谱平坦（\(r_{\mathrm{eff}}\approx n\)），则退化为普通维数依赖。</p>
+</div>
+
+<div class="tpl" id="tpl-t3s4" data-tag="定理 3 · 步骤 4" data-title="代入 Minsker 不等式反解 c（主条件 + 技术条件）">
+  <h3>代入</h3>
+  <p>取 \(X_l\to\tilde Y_j\)、\(U\to U_0\)、\(\sigma^2\to c\sigma_0^2\)、阈值 \(t'=ct\)，代入 Minsker 定理 3.1（见上方「支撑原定理」）：</p>
+  \[ \Pr\big(\|\mathcal S_c\|_2\gt ct\big)\le14\,r_{\mathrm{eff}}(\Sigma)\exp\Big(-\frac{(ct)^2/2}{c\sigma_0^2+ctU_0/3}\Big)
+     =14\,r_{\mathrm{eff}}(\Sigma)\exp\Big(-\frac{c\,t^2}{2\sigma_0^2+\tfrac23tU_0}\Big). \]
+  <h3>主条件：令尾概率 ≤ δ</h3>
+  \[ 14\,r_{\mathrm{eff}}(\Sigma)\exp\Big(-\frac{c\,t^2}{2\sigma_0^2+\tfrac23tU_0}\Big)\le\delta
+     \qquad\Longleftrightarrow\qquad c\ \ge\ \Big(\frac{2\sigma_0^2}{t^2}+\frac{2U_0}{3t}\Big)\ln\frac{14\,r_{\mathrm{eff}}(\Sigma)}{\delta}. \]
+  <h3>技术条件：t′ 的下门槛</h3>
+  <p>Minsker 定理要求 \(t'\ge\frac16\big(U+\sqrt{U^2+36\sigma^2}\big)\)，即 \(ct\ge\frac16\big(U_0+\sqrt{U_0^2+36c\sigma_0^2}\big)\)。验证充分形式：令 \(ct\ge\frac{U_0}{3}+\frac{\sigma_0^2}{t}\)，则</p>
+  \[ 6ct\ \ge\ 2U_0+\frac{6\sigma_0^2}{t}\ \ge\ U_0+\sqrt{U_0^2+36c\sigma_0^2}
+     \quad\big(\Longleftrightarrow\ c\le\tfrac{U_0}{3t}+\tfrac{\sigma_0^2}{t^2}\ \text{时右边平方可验}\big), \]
+  <p>解得技术条件对应的下界 \(c\ge\frac{U_0}{3t}+\frac{\sigma_0^2}{t^2}\)。</p>
+  <h3>合并</h3>
+  \[ c\ \ge\ \max\Bigg\{\Big(\frac{2\sigma_0^2}{t^2}+\frac{2U_0}{3t}\Big)\ln\frac{14\,r_{\mathrm{eff}}(\Sigma)}{\delta},\quad\frac{U_0}{3t}+\frac{\sigma_0^2}{t^2}\Bigg\}. \]
+  <p>即定理 3 所证的充分条件（取 \(t=\varepsilon\lambda_{\min}(W)\)）。</p>
+</div>
+
+<div class="tpl" id="tpl-t3s5" data-tag="定理 3 · 步骤 5" data-title="由谱范数控制导出 PSD 夹逼">
+  <h3>最后一步</h3>
+  <p>取 \(t=\varepsilon\lambda_{\min}(W)\)。当 \(\|\hat W-W\|_2\le t\) 时，利用 \(W\succeq\lambda_{\min}(W)I\)（PSD 矩阵的最小特征值下界）：</p>
+  \[ -\varepsilon W\ \preceq\ -\varepsilon\lambda_{\min}(W)I\ \preceq\ \hat W-W\ \preceq\ \varepsilon\lambda_{\min}(W)I\ \preceq\ \varepsilon W. \]
+  <p>两边加 \(W\) 即得乘性谱夹紧：</p>
+  \[ (1-\varepsilon)W\ \preceq\ \hat W\ \preceq\ (1+\varepsilon)W\ \qquad\Rightarrow\qquad \lambda_{\min}(\hat W)\ge(1-\varepsilon)\lambda_{\min}(W). \]
+  <p>由步骤 4，该事件概率 \(\ge1-\delta\)。\(\blacksquare\)</p>
+  <h3>回顾整条路径</h3>
+  <p>中心化（步骤 1）→ 范数界 \(U_0\)（步骤 2）→ 方差代理与有效秩（步骤 3）→ 代入 Minsker 反解 \(c\)（步骤 4）→ 范数控制转 PSD 夹逼（步骤 5）。其中步骤 5 的换算是所有「绝对量控制 → 相对量保证」证明的标准收尾：把 \(\lambda_{\min}(W)\) 这个尺度显式提出来，绝对偏差 \(t\) 才能翻译成乘性偏差 \(\varepsilon\)。</p>
+</div>
+
+<!-- ================= 详情模板：实验卡片 ================= -->
+<div class="tpl" id="tpl-exp1" data-tag="实验 4.3.1" data-title="采样量 c 的影响">
+  <div class="modal-split">
+    <div>
+      <div class="figwrap"><img src="figures_v2/fig_4_1.png" alt="不同采样量c下各算法随机故障后成功率变化曲线"><div class="figcap">图 4-1　不同采样量 c / 预算 s 下各算法随机故障后成功率变化曲线</div></div>
+      <p class="small">设置：\(n=100\)，\(m=1000\)，\(T=300\)，\(\delta=0.3\)，\(\varepsilon=0.3\)，同质 \(p=0.8\)，Monte Carlo 3000 次；统一传感器预算 \(s=c\) 以保证资源可比。</p>
+    </div>
+    <div class="analysis">
+      <h4>关键现象</h4>
+      <ul class="tick">
+        <li><b>one-shot WR 非单调「阶梯」跃升：</b>\(c\lt600\) 时成功率近零；\(c\approx700\) 时由 3% 骤升至 80.93%——冗余采样开始有效覆盖社区桥接方向的关键传感器；\(c=800,900\) 回落至 70% 左右，\(c=1000\) 回升至 87%。</li>
+        <li><b>波动根源：</b>新增样本不一定分配到尚未充分覆盖的关键跨社区弱连接位置，出现边际收益下降的局部回落；整体趋势仍随冗余增加逼近高成功率区间。</li>
+        <li><b>Top-s / WOR 单调增长、起效更晚：</b>依赖「覆盖规模扩张」，\(c=900\) 才显著提升，\(c=1000\) 达到较高成功率（Top-s 82%、WOR 80%）。</li>
+        <li><b>资源门槛：</b>以「首次达到 80% 成功率」计，one-shot WR 仅需 \(c\approx700\)，Top-s / WOR 需 \(c=1000\)。</li>
+      </ul>
+      <h4>结论</h4>
+      <p>带放回冗余设计对关键弱方向呈「阈值敏感性」（临界值下几乎无效、跨阈值后迅速生效），固定子集设计呈「资源累积敏感性」（随预算线性增长但始终滞后）。部署时应将采样量设于跃升点后的稳定高点。</p>
+    </div>
+  </div>
+</div>
+
+<div class="tpl" id="tpl-exp2" data-tag="实验 4.3.2" data-title="同质存活概率 p 的影响">
+  <div class="modal-split">
+    <div>
+      <div class="figwrap"><img src="figures_v2/fig_4_2.png" alt="不同同质存活概率p下各算法成功率-采样量曲线"><div class="figcap">图 4-2　不同同质存活概率 p 下各算法随机故障的「成功率-采样量」变化曲线</div></div>
+      <p class="small">设置：\(p\in\{0.9,0.8,0.7,0.6,0.5\}\)，\(\varepsilon=0.4\)，\(\delta=0.3\)，Monte Carlo 10000 次。</p>
+    </div>
+    <div class="analysis">
+      <h4>关键现象</h4>
+      <ul class="tick">
+        <li><b>one-shot WR「阈值右移」而非崩塌：</b>\(p=0.9\) 时 \(c=700\) 即达 99.99%；\(p=0.8\) 时 \(c\approx600\) 达 80%，\(c\ge800\) 后稳定 99%+；\(p=0.7\) 时增加冗余（\(c=700\sim1000\)）仍可恢复至接近 99%；\(p=0.6,0.5\) 时曲线右移、波动增强，但仍可获中高成功率。</li>
+        <li><b>Top-s / WOR 整体崩塌：</b>\(p=0.7\) 时 \(c=1000\) 仅约 72%；\(p\le0.6\) 骤降至约 1.5%；\(p=0.5\) 几乎完全失效——关键位置一旦失效且无冗余，性能迅速崩溃。</li>
+        <li><b>保持率对比：</b>以 \(p=0.9,c=1000\) 为基准，one-shot WR 在 \(p=0.7,0.6,0.5\) 的成功率保持率约 97.9%、75.4%、83.5%，远高于 Top-s / WOR 的约 1.5%。</li>
+        <li><b>资源增长平缓：</b>80% 成功率门槛下，one-shot WR 在 \(p=0.9,0.8,0.7,0.5\) 分别需约 \(c=700,600,700,1000\)；Top-s 仅 \(p\ge0.8\) 时可及。</li>
+      </ul>
+      <h4>结论</h4>
+      <p>\(\tau_i/p_i\) 采样分布能补偿「低可靠但高结构重要性」的关键位置；\(p=0.5\) 处的局部反弹（高于 \(p=0.6\)）源于单次随机实例的统计波动，应从整体包络理解。</p>
+    </div>
+  </div>
+</div>
+
+<div class="tpl" id="tpl-exp3" data-tag="实验 4.3.3" data-title="异质存活概率 p 的影响">
+  <div class="modal-split">
+    <div>
+      <div class="figwrap"><img src="figures_v2/fig_4_3.png" alt="不同异质存活概率区间下各算法成功率-采样量曲线"><div class="figcap">图 4-3　不同异质存活概率区间下各算法随机故障的「成功率-采样量」变化曲线</div></div>
+      <p class="small">设置：\(p_i\sim U[\bar p\pm0.1]\)（固定随机种子保证可复现），\(\bar p\in\{0.8,0.7,0.6,0.5\}\)，\(\varepsilon=0.4\)，Monte Carlo 10000 次。</p>
+    </div>
+    <div class="analysis">
+      <h4>关键现象</h4>
+      <ul class="tick">
+        <li><b>优势在中低可靠度进一步放大：</b>\(\bar p=0.8\) 时 one-shot WR 在 \(c=700\sim1000\) 成功率均 &gt;90%；\(\bar p=0.7\) 时 \(c=700\) 达 84.51%、\(c=900\) 达 99.81%；\(\bar p=0.6\) 时可通过增加冗余接近 100%，而 Top-s / WOR 几乎完全失效。</li>
+        <li><b>异质性甚至带来提升：</b>与同质场景对比，\(c=1000\) 时异质成功率提升约 7~22 个百分点（中低 \(\bar p\) 下）；Top-s / WOR 则基本持平甚至略降。</li>
+        <li><b>自适应机制：</b>\(\tau_i/p_i\) 采样分布根据「重要性」与「可靠性」的不均匀性自动调整冗余分配——部分位置更脆弱时，预算自动向「高价值 + 低可靠」位置倾斜。</li>
+      </ul>
+      <h4>谨慎解读</h4>
+      <p>当前异质 \(p_i\) 来自固定种子的一次随机实现，提升幅度受具体分布与桥接位置耦合关系影响。严谨结论应表述为「one-shot WR 对 \(p_i\) 拉宽不敏感，且中低可靠度下适应性更强」；上升为普适结论需多次实例 + 报告均值±方差（此为论文自述局限，也是投稿前建议补强项①）。</p>
+    </div>
+  </div>
+</div>
+
+<div class="tpl" id="tpl-exp4" data-tag="实验 4.3.4" data-title="相对误差 ε 的影响">
+  <div class="modal-split">
+    <div>
+      <div class="figwrap"><img src="figures_v2/fig_4_4.png" alt="不同误差范围ε下各算法成功率-采样量曲线"><div class="figcap">图 4-4　不同误差范围 ε 下各算法随机故障的「成功率-采样量」变化曲线</div></div>
+      <p class="small">设置：\(\varepsilon\in\{0.10,0.20,0.30,0.40,0.50\}\)，同质 \(p=0.8\)，Monte Carlo 10000 次。</p>
+    </div>
+    <div class="analysis">
+      <h4>关键现象</h4>
+      <ul class="tick">
+        <li><b>ε 大 ⇒ 阈值 α 宽松 ⇒ 曲线左移：</b>\(\alpha=(1-\varepsilon)\lambda_{\min}(W_{\mathrm{full}})\)。one-shot WR 的跃升点：\(\varepsilon=0.5,0.4,0.3,0.2\) 分别为 \(c\approx500,600,800,1000\)；\(\varepsilon=0.1\) 时 \(c=1000\) 仍不足 5%。</li>
+        <li><b>Top-s / WOR 同步左移但滞后显著：</b>\(\varepsilon=0.50\) 时 \(c\approx700\) 起效；\(\varepsilon=0.30\) 时 \(c=1000\) 成功率仅 85%；\(\varepsilon\le0.20\) 时在 \(c\le1000\) 范围内基本失效。</li>
+        <li><b>小 ε 下波动尖峰：</b>\(\varepsilon=0.30,0.20\) 分别在 \(c\approx500,800\) 出现约 10% 的局部异常峰值——少量样本偶然强化某关键方向但未形成稳定覆盖。工程上应避免把工作点设在跃升前的波动区间，选择跃升后的稳定平台。</li>
+        <li><b>理论印证 c∝1/ε²：</b>\(\varepsilon\) 从 0.50→0.40→0.30，\(1/\varepsilon^2\) 从 4→6.25→11，成功率首近 100% 的 \(c\) 从 500→600→1000——实验跃升点迁移与 Chernoff/AW 理论下界定性一致。</li>
+      </ul>
+      <h4>结论</h4>
+      <p>ε 是资源-效率权衡的核心参数：高可靠（小 ε）+ 资源受限（低 c）场景必须依靠带放回冗余加权对关键方向「过度覆盖」；只有 ε、c 足够大时固定子集算法才有竞争力。</p>
+    </div>
+  </div>
+</div>
+
+<div class="tpl" id="tpl-exp5" data-tag="实验 4.3.5" data-title="理论采样量曲面 c(ε,δ) 的对比">
+  <div class="modal-split">
+    <div>
+      <div class="figwrap"><img src="figures_v2/fig_4_5.png" alt="AW、Chernoff、Minsker三种理论采样量关于(ε,δ)的三维曲面图"><div class="figcap">图 4-5　AW、Chernoff、Minsker 三种理论采样量关于 \((\varepsilon,\delta)\) 的三维曲面图</div></div>
+      <p class="small">理论下界回答「给定精度 ε 与置信 1−δ 下，理论上需要多少冗余样本」，与经验最优 c 互为印证而非直接等价。</p>
+    </div>
+    <div class="analysis">
+      <h4>关键现象</h4>
+      <ul class="tick">
+        <li><b>对 ε 极敏感、对 δ 仅对数级：</b>固定 \(\delta=0.3\)，\(\varepsilon\) 从 0.6 收紧到 0.1，三条下界均现数量级跃升（\(1/\varepsilon^2\) 机制主导）；固定 \(\varepsilon=0.3\)，\(\delta\) 从 0.5 降至 0.05 仅有限增长（\(\log(1/\delta)\) 次级影响）。</li>
+        <li><b>Chernoff ≈ AW 的 0.53~0.56 倍：</b>各典型 \((\varepsilon,\delta)\) 组合下 Chernoff 始终显著低于 AW，更贴近可实现样本量——工程与实验对比的主参考界。</li>
+        <li><b>Minsker 极保守（高 7+ 个数量级）：</b>源于其中心化偏差 + 方差代理的谱范数控制在 \(1/(q_ip_i)\) 重加权下放大了 \(U_0\) 与 \(\Sigma\) 的量级——不是理论失效，而是该分析路径在加权设计下的代价。</li>
+        <li><b>三界面协同定位：</b>AW / Chernoff 作主导型样本复杂度参考（解释 ε 收紧 → 经验曲线右移）；Minsker 作保守上界与补充分析工具（揭示更严范数控制框架下的极端冗余成本）。</li>
+      </ul>
+      <h4>结论</h4>
+      <p>理论曲面与经验成功率曲线形成一致解释：减小 ε 或降低可靠性显著推高所需采样规模，AW / Chernoff 的 \(c(\varepsilon,\delta)\) 随 ε 减小快速上升——验证了理论对实验现象的解释能力，构成「建模—算法—定理—实验」闭环的最后一环。</p>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function(){
+  var sections = Array.prototype.slice.call(document.querySelectorAll(".slide"));
+  var items    = Array.prototype.slice.call(document.querySelectorAll(".nav-item"));
+  var bar = document.getElementById("bar");
+  var backtop = document.getElementById("backtop");
+
+  items.forEach(function(it){
+    it.addEventListener("click", function(){
+      var i = parseInt(it.dataset.i, 10);
+      var sec = document.getElementById("sec-" + i);
+      if(sec) window.scrollTo({top: sec.getBoundingClientRect().top + window.pageYOffset - 16, behavior:"smooth"});
+    });
+  });
+
+  function onScroll(){
+    var pos = window.pageYOffset + window.innerHeight * 0.3;
+    var cur = 0;
+    for(var i = 0; i < sections.length; i++){
+      if(sections[i].offsetTop <= pos) cur = i;
+    }
+    items.forEach(function(it, idx){ it.classList.toggle("active", idx === cur); });
+    var act = items[cur];
+    if(act && act.scrollIntoView) act.scrollIntoView({block:"nearest"});
+    var h = document.documentElement.scrollHeight - window.innerHeight;
+    bar.style.width = (h > 0 ? (window.pageYOffset / h * 100) : 0) + "%";
+    backtop.classList.toggle("show", window.pageYOffset > 600);
+  }
+  window.addEventListener("scroll", onScroll, {passive:true});
+  onScroll();
+
+  backtop.addEventListener("click", function(){ window.scrollTo({top:0, behavior:"smooth"}); });
+
+  /* ===== 支撑原定理：点击展开/收起 ===== */
+  Array.prototype.forEach.call(document.querySelectorAll(".orig-thm .orig-head"), function(h){
+    h.addEventListener("click", function(){
+      h.parentElement.classList.toggle("open");
+    });
+  });
+
+  /* ===== 弹窗逻辑：证明步骤 / 实验卡片 ===== */
+  var overlay = document.getElementById("modalOverlay");
+  var mTag  = document.getElementById("mTag");
+  var mTitle = document.getElementById("mTitle");
+  var mBody = document.getElementById("modalBody");
+
+  function renderMath(el){
+    if(window.renderMathInElement){
+      renderMathInElement(el, {
+        delimiters: [
+          {left:"\\[", right:"\\]", display:true},
+          {left:"\\(", right:"\\)", display:false}
+        ],
+        throwOnError:false
+      });
+    }
+  }
+
+  function openModal(tplId){
+    var tpl = document.getElementById(tplId);
+    if(!tpl) return;
+    mTag.textContent = tpl.getAttribute("data-tag") || "详情";
+    mTitle.textContent = tpl.getAttribute("data-title") || "";
+    mBody.innerHTML = tpl.innerHTML;
+    overlay.classList.add("show");
+    document.body.style.overflow = "hidden";
+    mBody.scrollTop = 0;
+    renderMath(mBody);
+  }
+
+  function closeModal(){
+    overlay.classList.remove("show");
+    document.body.style.overflow = "";
+    mBody.innerHTML = "";
+  }
+
+  Array.prototype.forEach.call(document.querySelectorAll(".pstep, .exp-card"), function(el){
+    el.addEventListener("click", function(){ openModal(el.getAttribute("data-tpl")); });
+  });
+
+  document.getElementById("modalClose").addEventListener("click", closeModal);
+  document.getElementById("modalOk").addEventListener("click", closeModal);
+  overlay.addEventListener("click", function(e){ if(e.target === overlay) closeModal(); });
+  document.addEventListener("keydown", function(e){ if(e.key === "Escape" && overlay.classList.contains("show")) closeModal(); });
+
+  function tryRender(){
+    if(window.renderMathInElement){
+      renderMathInElement(document.body, {
+        delimiters: [
+          {left:"\\[", right:"\\]", display:true},
+          {left:"\\(", right:"\\)", display:false}
+        ],
+        throwOnError:false
+      });
+    } else {
+      setTimeout(tryRender, 300);
+    }
+  }
+  tryRender();
+});
+</script>
+</body>
+</html>
